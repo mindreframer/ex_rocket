@@ -53,4 +53,15 @@ defmodule ExRocket.RustRocksDB do
   end
 
   def delete(_db_ref, _key), do: Erlang.nif_error(:nif_not_loaded)
+  def write_batch(_db_ref, _operations), do: Erlang.nif_error(:nif_not_loaded)
+  def delete_range(_db_ref, _from, _to), do: Erlang.nif_error(:nif_not_loaded)
+  def multi_get(_db_ref, _keys), do: Erlang.nif_error(:nif_not_loaded)
+  def key_may_exist(_db_ref, _key), do: Erlang.nif_error(:nif_not_loaded)
+  def iterator(_db_ref, _mode), do: Erlang.nif_error(:nif_not_loaded)
+
+  def iterator_range(_db_ref, _mode, _from, _to, _read_options \\ %{}),
+    do: Erlang.nif_error(:nif_not_loaded)
+
+  def prefix_iterator(_db_ref, _prefix), do: Erlang.nif_error(:nif_not_loaded)
+  def next(_iterator_ref), do: Erlang.nif_error(:nif_not_loaded)
 end

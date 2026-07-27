@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 3.1: Implement write batches.
-- [ ] Phase 3.2: Implement range deletion.
-- [ ] Phase 3.3: Implement multi-get.
-- [ ] Phase 3.4: Implement existence checks.
-- [ ] Phase 3.5: Add iterator resources.
-- [ ] Phase 3.6: Implement all default-CF iterator APIs.
-- [ ] Phase 3.7: Test and commit.
+- [x] Phase 3.1: Implement write batches.
+- [x] Phase 3.2: Implement range deletion.
+- [x] Phase 3.3: Implement multi-get.
+- [x] Phase 3.4: Implement existence checks.
+- [x] Phase 3.5: Add iterator resources.
+- [x] Phase 3.6: Implement all default-CF iterator APIs.
+- [x] Phase 3.7: Test and commit.
 
 ## Implementation Steps
 
@@ -22,6 +22,6 @@
 
 ## Quality Gate
 
-- [ ] Batch tests pass.
-- [ ] Iterator tests pass.
-- [ ] Full suite passes.
+- [x] Batch tests pass.
+- [x] Iterator tests pass.
+- [x] Full suite passes.
