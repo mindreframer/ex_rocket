@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 2.1: Port baseline option decoding.
-- [ ] Phase 2.2: Implement open and read-only open.
-- [ ] Phase 2.3: Implement destroy and repair.
-- [ ] Phase 2.4: Implement database metadata.
-- [ ] Phase 2.5: Implement put and delete.
-- [ ] Phase 2.6: Implement get and Elixir helpers.
-- [ ] Phase 2.7: Test and commit.
+- [x] Phase 2.1: Port baseline option decoding.
+- [x] Phase 2.2: Implement open and read-only open.
+- [x] Phase 2.3: Implement destroy and repair.
+- [x] Phase 2.4: Implement database metadata.
+- [x] Phase 2.5: Implement put and delete.
+- [x] Phase 2.6: Implement get and Elixir helpers.
+- [x] Phase 2.7: Test and commit.
 
 ## Implementation Steps
 
@@ -22,7 +22,7 @@
 
 ## Quality Gate
 
-- [ ] Lifecycle tests pass.
-- [ ] KV tests pass.
-- [ ] Legacy tests pass.
-- [ ] Native build passes.
+- [x] Lifecycle tests pass.
+- [x] KV tests pass.
+- [x] Legacy tests pass.
+- [x] Native build passes.

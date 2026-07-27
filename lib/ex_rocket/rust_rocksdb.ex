@@ -29,4 +29,28 @@ defmodule ExRocket.RustRocksDB do
     version: @version
 
   def lxcode, do: Erlang.nif_error(:nif_not_loaded)
+  def latest_sequence_number(_db_ref), do: Erlang.nif_error(:nif_not_loaded)
+  def open(_path, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
+  def open_for_read_only(_path, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
+  def destroy(_path, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
+  def repair(_path, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
+  def get_db_path(_db_ref), do: Erlang.nif_error(:nif_not_loaded)
+  def put(_db_ref, _key, _value), do: Erlang.nif_error(:nif_not_loaded)
+  def get(_db_ref, _key), do: Erlang.nif_error(:nif_not_loaded)
+
+  def get(db_ref, key, default) do
+    case get(db_ref, key) do
+      :undefined -> {:ok, default}
+      result -> result
+    end
+  end
+
+  def getb(db_ref, key) do
+    case get(db_ref, key) do
+      :undefined -> :undefined
+      {:ok, value} -> {:ok, :erlang.binary_to_term(value)}
+    end
+  end
+
+  def delete(_db_ref, _key), do: Erlang.nif_error(:nif_not_loaded)
 end

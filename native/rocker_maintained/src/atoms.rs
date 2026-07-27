@@ -1,5 +1,7 @@
 rustler::atoms! {
-    ok,
+    error,
     maintained,
+    ok,
+    undefined,
     vsn1
 }
