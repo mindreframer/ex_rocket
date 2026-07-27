@@ -12,14 +12,12 @@ defmodule ExRocket do
     otp_app: :ex_rocket,
     crate: "rocker",
     base_url: "https://github.com/mindreframer/ex_rocket/releases/download/v#{@version}",
-    nif_versions: ["2.16", "2.17"],
+    nif_versions: ["2.16"],
     targets: ~w(
       aarch64-apple-darwin
       x86_64-apple-darwin
 
-      aarch64-unknown-linux-musl
       x86_64-unknown-linux-gnu
-      x86_64-unknown-linux-musl
 
       x86_64-pc-windows-msvc
     ),

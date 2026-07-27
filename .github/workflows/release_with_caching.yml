@@ -17,21 +17,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nif: ["2.16", "2.17"]
+        # NIF 2.16 supports Erlang/OTP 24 and later, including runtimes that
+        # expose newer NIF versions.
+        nif: ["2.16"]
         job:
           - { target: aarch64-apple-darwin, os: macos-14 }
           - { target: x86_64-apple-darwin, os: macos-14 }
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
-          - {
-              target: aarch64-unknown-linux-musl,
-              os: ubuntu-22.04,
-              use-cross: true,
-            }
-          - {
-              target: x86_64-unknown-linux-musl,
-              os: ubuntu-22.04,
-              use-cross: true,
-            }
           - { target: x86_64-pc-windows-msvc, os: windows-2022 }
 
     steps:
@@ -87,15 +79,6 @@ jobs:
             cargo-build-${{ matrix.job.target }}-${{ matrix.nif }}-
             cargo-build-${{ matrix.job.target }}-
 
-      # Cross compilation cache (if using cross)
-      - name: Cache Cross docker images
-        uses: actions/cache@v5
-        if: matrix.job.use-cross
-        with:
-          path: ~/.cache/cross
-          key: cross-${{ matrix.job.target }}
-          restore-keys: cross-
-
       - name: Build the project
         id: build-crate
         uses: philss/rustler-precompiled-action@v1.1.5
@@ -104,7 +87,6 @@ jobs:
           project-version: ${{ env.PROJECT_VERSION }}
           target: ${{ matrix.job.target }}
           nif-version: ${{ matrix.nif }}
-          use-cross: ${{ matrix.job.use-cross }}
           project-dir: native/rocker
 
       - name: Artifact upload

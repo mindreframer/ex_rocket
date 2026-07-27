@@ -31,7 +31,12 @@ removed after validation.
 ## Supported OS
 * Linux
 * Windows
-* MacOS
+* macOS
+
+Precompiled NIFs are published for Apple Silicon and Intel macOS, x86-64
+Linux with glibc, and x86-64 Windows. Other targets, including musl-based
+Linux distributions, can build from source with `FORCE_BUILD=1` and the build
+requirements below.
 
 ## Features
 * kv operations
