@@ -87,6 +87,9 @@ jobs:
           project-version: ${{ env.PROJECT_VERSION }}
           target: ${{ matrix.job.target }}
           nif-version: ${{ matrix.nif }}
+          # Passing the unset matrix value avoids a composite-action bug where
+          # its boolean `false` default is treated as a truthy string.
+          use-cross: ${{ matrix.job.use-cross }}
           project-dir: native/rocker
 
       - name: Artifact upload
