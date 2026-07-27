@@ -67,4 +67,5 @@ jobs:
       - run: FORCE_BUILD=1 mix compile --warnings-as-errors
       - run: mix credo --strict
       - run: FORCE_BUILD=1 mix test
+      - run: scripts/check_rocksdb_compatibility.sh
       - run: cargo fmt --manifest-path native/rocker_maintained/Cargo.toml -- --check

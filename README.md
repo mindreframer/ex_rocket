@@ -93,6 +93,28 @@ implementations are separate modules and crates, rollback is simply returning
 callers to `ExRocket`; removing the maintained experiment does not require
 rewriting the legacy backend.
 
+## On-disk compatibility
+
+A lightweight bidirectional check verifies the database formats used by the
+legacy RocksDB 10.4.2 backend and maintained RocksDB 11.1.2 backend:
+
+```sh
+scripts/check_rocksdb_compatibility.sh
+```
+
+The check writes with each backend in a separate BEAM process, closes the
+database, and reads it with the other backend. It covers binary and Unicode
+values, empty and larger values, Erlang external terms, write batches,
+deletions, column families, and CF batches. Both directions currently pass:
+
+```text
+RocksDB 10.4.2 write -> RocksDB 11.1.2 read: PASS
+RocksDB 11.1.2 write -> RocksDB 10.4.2 read: PASS
+```
+
+This is a practical compatibility signal, not a guarantee for every RocksDB
+option, SST format, merge operator, or future version. Production migrations
+should still retain backups and validate representative data before rollback.
 
 ## Status
 Passed all the functional and performance tests.
