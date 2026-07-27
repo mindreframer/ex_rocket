@@ -13,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.91.0
+        with:
+          components: rustfmt
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.15.7"
