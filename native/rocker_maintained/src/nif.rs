@@ -209,7 +209,7 @@ pub fn write_batch<'a>(
                 let value: Binary = terms[2].decode()?;
                 batch.put(key.as_slice(), value.as_slice());
             }
-            "delete" if terms.len() == 2 => {
+            "delete" if terms.len() >= 2 => {
                 let key: Binary = terms[1].decode()?;
                 batch.delete(key.as_slice());
             }
@@ -220,7 +220,7 @@ pub fn write_batch<'a>(
                 let cf = guard.cf_handle(&cf_name).ok_or(rustler::Error::BadArg)?;
                 batch.put_cf(cf, key.as_slice(), value.as_slice());
             }
-            "delete_cf" if terms.len() == 3 => {
+            "delete_cf" if terms.len() >= 3 => {
                 let cf_name: String = terms[1].decode()?;
                 let key: Binary = terms[2].decode()?;
                 let cf = guard.cf_handle(&cf_name).ok_or(rustler::Error::BadArg)?;
