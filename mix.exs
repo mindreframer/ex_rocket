@@ -56,6 +56,7 @@ defmodule ExRocket.MixProject do
       links: %{"GitHub" => @source_url, "Changelog" => @changelog_url},
       files: [
         "lib",
+        "native/rocker/.cargo",
         "native/rocker/src",
         "native/rocker/Cargo*",
         "native/rocker/rust-toolchain.toml",

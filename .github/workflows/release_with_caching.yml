@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Extract project version
         shell: bash
@@ -44,31 +44,9 @@ jobs:
           # Get the project version from mix.exs
           echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> $GITHUB_ENV
 
-      # Cache LLVM/Clang installation
-      - name: Cache LLVM and Clang
-        uses: actions/cache@v4
-        id: cache-llvm
-        with:
-          path: |
-            C:/Program Files/LLVM
-            /usr/local/Cellar/llvm@15
-            /usr/lib/llvm-15
-            ~/.cache/llvm
-          key: llvm-15-${{ matrix.job.target }}-${{ matrix.job.os }}
-          restore-keys: |
-            llvm-15-${{ matrix.job.target }}-
-            llvm-15-
-
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2.0.3
-        if: steps.cache-llvm.outputs.cache-hit != 'true'
-        with:
-          version: "15"
-          target: ${{ matrix.job.target }}
-
       # Cache Rust toolchain
       - name: Cache Rust toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.rustup/toolchains
@@ -87,7 +65,7 @@ jobs:
 
       # Cache Cargo registry and dependencies
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index
@@ -100,7 +78,7 @@ jobs:
 
       # Cache build artifacts (target directory)
       - name: Cache Cargo build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             native/rocker/target
@@ -111,7 +89,7 @@ jobs:
 
       # Cross compilation cache (if using cross)
       - name: Cache Cross docker images
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         if: matrix.job.use-cross
         with:
           path: ~/.cache/cross
@@ -120,7 +98,7 @@ jobs:
 
       - name: Build the project
         id: build-crate
-        uses: philss/rustler-precompiled-action@v1.0.1
+        uses: philss/rustler-precompiled-action@v1.1.5
         with:
           project-name: rocker
           project-version: ${{ env.PROJECT_VERSION }}
@@ -130,7 +108,7 @@ jobs:
           project-dir: native/rocker
 
       - name: Artifact upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.build-crate.outputs.file-name }}
           path: ${{ steps.build-crate.outputs.file-path }}
