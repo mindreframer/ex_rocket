@@ -1,6 +1,12 @@
-use crate::atoms::{end_of_iterator, error, maintained, ok, undefined, unknown_cf, vsn1};
+use crate::atoms::{
+    backup, end_of_iterator, error, maintained, ok, snap, undefined, unknown_cf, vsn1,
+};
 use crate::options::RockerOptions;
-use rocksdb::{Direction, DBIterator, IteratorMode, Options, ReadOptions, WriteBatch, DB};
+use rocksdb::{
+    backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
+    checkpoint::Checkpoint,
+    Direction, DBIterator, IteratorMode, Options, ReadOptions, Snapshot, WriteBatch, DB,
+};
 use rustler::types::list::ListIterator;
 use rustler::{Binary, Encoder, Env, NifResult, OwnedBinary, Resource, ResourceArc, Term};
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -11,9 +17,23 @@ pub struct DbResource {
 
 impl Resource for DbResource {}
 
+pub struct SnapshotResource {
+    snapshot: Mutex<Snapshot<'static>>,
+    owner: ResourceArc<DbResource>,
+}
+
+impl Resource for SnapshotResource {}
+
+impl SnapshotResource {
+    fn lock(&self) -> MutexGuard<'_, Snapshot<'static>> {
+        self.snapshot.lock().unwrap()
+    }
+}
+
 pub struct IteratorResource {
     iter: Mutex<DBIterator<'static>>,
     _owner: ResourceArc<DbResource>,
+    _snapshot_owner: Option<ResourceArc<SnapshotResource>>,
 }
 
 impl Resource for IteratorResource {}
@@ -39,7 +59,9 @@ impl DbResource {
 }
 
 pub fn on_load(env: Env, _load_info: Term) -> bool {
-    env.register::<DbResource>().is_ok() && env.register::<IteratorResource>().is_ok()
+    env.register::<DbResource>().is_ok()
+        && env.register::<SnapshotResource>().is_ok()
+        && env.register::<IteratorResource>().is_ok()
 }
 
 #[rustler::nif]
@@ -457,6 +479,7 @@ fn make_iterator_resource(
     ResourceArc::new(IteratorResource {
         iter: Mutex::new(iterator),
         _owner: owner,
+        _snapshot_owner: None,
     })
 }
 
@@ -554,6 +577,282 @@ pub fn prefix_iterator_cf<'a>(
     let iterator = guard.prefix_iterator_cf(cf, prefix.as_slice());
     let iterator = make_iterator_resource(resource.clone(), iterator);
     Ok((ok(), iterator).encode(env))
+}
+
+fn decode_snapshot(resource: Term<'_>) -> NifResult<ResourceArc<SnapshotResource>> {
+    let terms = rustler::types::tuple::get_tuple(resource)?;
+    if terms.len() != 3 {
+        return Err(rustler::Error::BadArg);
+    }
+    terms[2].decode()
+}
+
+#[rustler::nif]
+pub fn snapshot(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
+    let guard = resource.read();
+    let snapshot = guard.snapshot();
+    let snapshot = unsafe { std::mem::transmute::<Snapshot<'_>, Snapshot<'static>>(snapshot) };
+    drop(guard);
+    let snapshot_resource = ResourceArc::new(SnapshotResource {
+        snapshot: Mutex::new(snapshot),
+        owner: resource.clone(),
+    });
+    Ok((ok(), (snap(), resource, snapshot_resource)).encode(env))
+}
+
+#[rustler::nif]
+pub fn snapshot_get<'a>(
+    env: Env<'a>,
+    resource: Term<'a>,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    match decode_snapshot(resource)?.lock().get(key.as_slice()) {
+        Ok(Some(value)) => {
+            let mut output = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
+            output.as_mut_slice().copy_from_slice(value.as_ref());
+            Ok((ok(), output.release(env)).encode(env))
+        }
+        Ok(None) => Ok(undefined().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn snapshot_get_cf<'a>(
+    env: Env<'a>,
+    resource: Term<'a>,
+    name: String,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let snapshot = decode_snapshot(resource)?;
+    let db_guard = snapshot.owner.read();
+    let Some(cf) = db_guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    match snapshot.lock().get_cf(cf, key.as_slice()) {
+        Ok(Some(value)) => {
+            let mut output = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
+            output.as_mut_slice().copy_from_slice(value.as_ref());
+            Ok((ok(), output.release(env)).encode(env))
+        }
+        Ok(None) => Ok(undefined().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn snapshot_multi_get<'a>(
+    env: Env<'a>,
+    resource: Term<'a>,
+    keys: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let keys: NifResult<Vec<Vec<u8>>> = keys
+        .decode::<ListIterator>()?
+        .map(|term| term.decode::<Binary>().map(|key| key.as_slice().to_vec()))
+        .collect();
+    let snapshot = decode_snapshot(resource)?;
+    let values = snapshot.lock().multi_get(keys?);
+    let mut output = Vec::with_capacity(values.len());
+    for value in values {
+        match value {
+            Ok(Some(value)) => {
+                let mut binary = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
+                binary.as_mut_slice().copy_from_slice(value.as_ref());
+                output.push((ok(), binary.release(env)).encode(env));
+            }
+            Ok(None) => output.push(undefined().encode(env)),
+            Err(reason) => output.push((error(), reason.to_string()).encode(env)),
+        }
+    }
+    Ok((ok(), output).encode(env))
+}
+
+#[rustler::nif]
+pub fn snapshot_multi_get_cf<'a>(
+    env: Env<'a>,
+    resource: Term<'a>,
+    keys: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let decoded: NifResult<Vec<(String, Vec<u8>)>> = keys
+        .decode::<ListIterator>()?
+        .map(|item| {
+            let tuple = rustler::types::tuple::get_tuple(item)?;
+            if tuple.len() != 2 {
+                return Err(rustler::Error::BadArg);
+            }
+            Ok((tuple[0].decode()?, tuple[1].decode::<Binary>()?.as_slice().to_vec()))
+        })
+        .collect();
+    let decoded = decoded?;
+    let snapshot = decode_snapshot(resource)?;
+    let db_guard = snapshot.owner.read();
+    let mut requests = Vec::with_capacity(decoded.len());
+    for (name, key) in &decoded {
+        let Some(cf) = db_guard.cf_handle(name) else {
+            return Ok((error(), unknown_cf()).encode(env));
+        };
+        requests.push((cf, key.as_slice()));
+    }
+    let values = snapshot.lock().multi_get_cf(requests);
+    let mut output = Vec::with_capacity(values.len());
+    for value in values {
+        match value {
+            Ok(Some(value)) => {
+                let mut binary = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
+                binary.as_mut_slice().copy_from_slice(value.as_ref());
+                output.push((ok(), binary.release(env)).encode(env));
+            }
+            Ok(None) => output.push(undefined().encode(env)),
+            Err(reason) => output.push((error(), reason.to_string()).encode(env)),
+        }
+    }
+    Ok((ok(), output).encode(env))
+}
+
+fn make_snapshot_iterator_resource(
+    snapshot: ResourceArc<SnapshotResource>,
+    iterator: DBIterator<'_>,
+) -> ResourceArc<IteratorResource> {
+    let iterator = unsafe { std::mem::transmute::<DBIterator<'_>, DBIterator<'static>>(iterator) };
+    ResourceArc::new(IteratorResource {
+        iter: Mutex::new(iterator),
+        _owner: snapshot.owner.clone(),
+        _snapshot_owner: Some(snapshot),
+    })
+}
+
+#[rustler::nif]
+pub fn snapshot_iterator<'a>(
+    env: Env<'a>,
+    resource: Term<'a>,
+    mode: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let snapshot = decode_snapshot(resource)?;
+    let (name, key, direction) = iterator_mode(mode)?;
+    let guard = snapshot.lock();
+    let iterator = match (name.as_str(), key.as_deref()) {
+        ("end", _) => guard.iterator(IteratorMode::End),
+        ("from", Some(key)) => guard.iterator(IteratorMode::From(key, direction)),
+        _ => guard.iterator(IteratorMode::Start),
+    };
+    let iterator = make_snapshot_iterator_resource(snapshot.clone(), iterator);
+    Ok((ok(), iterator).encode(env))
+}
+
+#[rustler::nif]
+pub fn snapshot_iterator_cf<'a>(
+    env: Env<'a>,
+    resource: Term<'a>,
+    name: String,
+    mode: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let snapshot = decode_snapshot(resource)?;
+    let db_guard = snapshot.owner.read();
+    let Some(cf) = db_guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    let (mode_name, key, direction) = iterator_mode(mode)?;
+    let snapshot_guard = snapshot.lock();
+    let iterator = match (mode_name.as_str(), key.as_deref()) {
+        ("end", _) => snapshot_guard.iterator_cf(cf, IteratorMode::End),
+        ("from", Some(key)) => snapshot_guard.iterator_cf(cf, IteratorMode::From(key, direction)),
+        _ => snapshot_guard.iterator_cf(cf, IteratorMode::Start),
+    };
+    let iterator = make_snapshot_iterator_resource(snapshot.clone(), iterator);
+    Ok((ok(), iterator).encode(env))
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn create_checkpoint(
+    env: Env,
+    resource: ResourceArc<DbResource>,
+    path: String,
+) -> NifResult<Term> {
+    let guard = resource.read();
+    match Checkpoint::new(&guard).and_then(|checkpoint| checkpoint.create_checkpoint(path)) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+fn backup_info<'a>(env: Env<'a>, engine: &BackupEngine) -> Vec<Term<'a>> {
+    engine
+        .get_backup_info()
+        .into_iter()
+        .map(|item| {
+            (backup(), item.backup_id, item.timestamp, item.size, item.num_files).encode(env)
+        })
+        .collect()
+}
+
+fn open_backup_engine(path: &str) -> Result<BackupEngine, rocksdb::Error> {
+    let options = BackupEngineOptions::new(path)?;
+    let rocks_env = rocksdb::Env::new()?;
+    BackupEngine::open(&options, &rocks_env)
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn create_backup(
+    env: Env,
+    resource: ResourceArc<DbResource>,
+    path: String,
+) -> NifResult<Term> {
+    let mut engine = match open_backup_engine(&path) {
+        Ok(engine) => engine,
+        Err(reason) => return Ok((error(), reason.to_string()).encode(env)),
+    };
+    match engine.create_new_backup(&resource.read()) {
+        Ok(()) => Ok((ok(), backup_info(env, &engine)).encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn get_backup_info(env: Env, path: String) -> NifResult<Term> {
+    match open_backup_engine(&path) {
+        Ok(engine) => Ok((ok(), backup_info(env, &engine)).encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn purge_old_backups(
+    env: Env,
+    path: String,
+    keep: usize,
+) -> NifResult<Term> {
+    let mut engine = match open_backup_engine(&path) {
+        Ok(engine) => engine,
+        Err(reason) => return Ok((error(), reason.to_string()).encode(env)),
+    };
+    match engine.purge_old_backups(keep) {
+        Ok(()) => Ok((ok(), backup_info(env, &engine)).encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn restore_from_backup(
+    env: Env,
+    backup_path: String,
+    restore_path: String,
+    backup_id: i32,
+) -> NifResult<Term> {
+    let mut engine = match open_backup_engine(&backup_path) {
+        Ok(engine) => engine,
+        Err(reason) => return Ok((error(), reason.to_string()).encode(env)),
+    };
+    let mut options = RestoreOptions::default();
+    options.set_keep_log_files(false);
+    let result = if backup_id == -1 {
+        engine.restore_from_latest_backup(&restore_path, &restore_path, &options)
+    } else {
+        engine.restore_from_backup(&restore_path, &restore_path, &options, backup_id as u32)
+    };
+    match result {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
 }
 
 #[rustler::nif]

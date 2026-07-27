@@ -96,4 +96,37 @@ defmodule ExRocket.RustRocksDB do
   def key_may_exist_cf(_db_ref, _cf_name, _key), do: Erlang.nif_error(:nif_not_loaded)
   def iterator_cf(_db_ref, _cf_name, _mode), do: Erlang.nif_error(:nif_not_loaded)
   def prefix_iterator_cf(_db_ref, _cf_name, _prefix), do: Erlang.nif_error(:nif_not_loaded)
+  def snapshot(_db_ref), do: Erlang.nif_error(:nif_not_loaded)
+  def snapshot_get(_snapshot_ref, _key), do: Erlang.nif_error(:nif_not_loaded)
+
+  def snapshot_get(snapshot_ref, key, default) do
+    case snapshot_get(snapshot_ref, key) do
+      :undefined -> {:ok, default}
+      result -> result
+    end
+  end
+
+  def snapshot_get_cf(_snapshot_ref, _cf_name, _key), do: Erlang.nif_error(:nif_not_loaded)
+
+  def snapshot_get_cf(snapshot_ref, cf_name, key, default) do
+    case snapshot_get_cf(snapshot_ref, cf_name, key) do
+      :undefined -> {:ok, default}
+      result -> result
+    end
+  end
+
+  def snapshot_multi_get(_snapshot_ref, _keys), do: Erlang.nif_error(:nif_not_loaded)
+  def snapshot_multi_get_cf(_snapshot_ref, _keys), do: Erlang.nif_error(:nif_not_loaded)
+  def snapshot_iterator(_snapshot_ref, _mode), do: Erlang.nif_error(:nif_not_loaded)
+  def snapshot_iterator_cf(_snapshot_ref, _cf_name, _mode), do: Erlang.nif_error(:nif_not_loaded)
+  def create_checkpoint(_db_ref, _path), do: Erlang.nif_error(:nif_not_loaded)
+  def create_backup(_db_ref, _path), do: Erlang.nif_error(:nif_not_loaded)
+  def get_backup_info(_backup_path), do: Erlang.nif_error(:nif_not_loaded)
+  def purge_old_backups(_backup_path, _keep), do: Erlang.nif_error(:nif_not_loaded)
+
+  def restore_from_backup(_backup_path, _restore_path, _backup_id),
+    do: Erlang.nif_error(:nif_not_loaded)
+
+  def restore_from_backup(backup_path, restore_path),
+    do: restore_from_backup(backup_path, restore_path, -1)
 end

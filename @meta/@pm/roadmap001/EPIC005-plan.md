@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 5.1: Add snapshot resources.
-- [ ] Phase 5.2: Implement default snapshot reads.
-- [ ] Phase 5.3: Implement CF snapshot reads.
-- [ ] Phase 5.4: Implement snapshot multi-get.
-- [ ] Phase 5.5: Implement snapshot iterators.
-- [ ] Phase 5.6: Implement checkpoints and backups.
-- [ ] Phase 5.7: Test and commit.
+- [x] Phase 5.1: Add snapshot resources.
+- [x] Phase 5.2: Implement default snapshot reads.
+- [x] Phase 5.3: Implement CF snapshot reads.
+- [x] Phase 5.4: Implement snapshot multi-get.
+- [x] Phase 5.5: Implement snapshot iterators.
+- [x] Phase 5.6: Implement checkpoints and backups.
+- [x] Phase 5.7: Test and commit.
 
 ## Implementation Steps
 
@@ -22,7 +22,7 @@
 
 ## Quality Gate
 
-- [ ] Snapshot tests pass.
-- [ ] Checkpoint tests pass.
-- [ ] Backup tests pass.
-- [ ] Full suite passes.
+- [x] Snapshot tests pass.
+- [x] Checkpoint tests pass.
+- [x] Backup tests pass.
+- [x] Full suite passes.
