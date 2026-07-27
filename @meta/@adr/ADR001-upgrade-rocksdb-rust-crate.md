@@ -54,9 +54,9 @@ The transition will be made in explicit, independently validated phases:
    error text is not required to remain identical.
 4. Remove the unmaintained native crate, its Cargo dependency graph, duplicate
    build/release jobs, and obsolete dual-backend comparison tooling.
-5. Retain `ExRocket` as the primary public API. Retain
-   `ExRocket.RustRocksDB` as an explicit alias-compatible module backed by the
-   same single maintained NIF.
+5. Retain `ExRocket` as the only public backend module. Remove the temporary
+   `ExRocket.RustRocksDB` migration module once the canonical NIF is bound
+   directly to `Elixir.ExRocket`.
 
 ## Compatibility Position
 
@@ -115,8 +115,8 @@ tested by `rust-rocksdb`.
 The existing ExRocket suite passed unchanged after `ExRocket` was routed through
 the maintained backend. The unmaintained native implementation was then removed.
 The maintained crate now occupies the canonical `native/rocker` path and produces
-the canonical `rocker` artifact. `ExRocket` remains the primary facade, while
-`ExRocket.RustRocksDB` is the single NIF-owning module.
+the canonical `rocker` artifact. The NIF is bound directly to `Elixir.ExRocket`;
+the temporary migration module and its duplicate tests were removed.
 
 ## Verification Required Before Legacy Removal
 

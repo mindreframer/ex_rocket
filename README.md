@@ -24,10 +24,9 @@ ExRocket uses the actively maintained `rust-rocksdb` package:
 | --- | --- | --- | --- |
 | `ExRocket` | `native/rocker` | `rust-rocksdb 0.51` | 11.1.2 |
 
-`ExRocket` is the primary API and delegates to `ExRocket.RustRocksDB`; both
-modules therefore use the same maintained NIF and expose the same function
-inventory. The former `rocksdb 0.24` / RocksDB 10.4.2 native implementation was
-used during migration validation and has been removed.
+`ExRocket` is the only public backend module. The former `rocksdb 0.24` /
+RocksDB 10.4.2 implementation and the temporary parallel migration module were
+removed after validation.
 
 ## Supported OS
 * Linux
@@ -74,15 +73,14 @@ ExRocket requires
 - tag a release `git tag v0.3.0`
 - push the tag: `git push mindrefamer v0.3.0`
 - wait for the compiled libs to be uploaded (takes around 15 minutes if all goes well)
-- run `mix rustler_precompiled.download ExRocket.RustRocksDB --all`
+- run `mix rustler_precompiled.download ExRocket --all`
 - verify the generated checksum file and NIF artifact set
 - now you can publish: `mix hex.publish`
 
 ## Validation
 
 Run `scripts/roadmap001_check.sh` to format, source-build, and test the native
-backend. The original ExRocket tests run unchanged through the `ExRocket` facade
-and therefore exercise the maintained NIF.
+backend. The original ExRocket tests run unchanged against the maintained NIF.
 
 ## On-disk compatibility
 

@@ -1,6 +1,4 @@
-use crate::atoms::{
-    backup, end_of_iterator, error, maintained, ok, snap, undefined, unknown_cf, vsn1,
-};
+use crate::atoms::{backup, end_of_iterator, error, ok, snap, undefined, unknown_cf, vsn1};
 use crate::options::RockerOptions;
 use crate::read_options::RockerReadOptions;
 use rocksdb::{
@@ -69,7 +67,7 @@ pub fn on_load(env: Env, _load_info: Term) -> bool {
 
 #[rustler::nif]
 pub fn lxcode(env: Env) -> NifResult<Term> {
-    Ok((ok(), maintained(), vsn1()).encode(env))
+    Ok((ok(), vsn1()).encode(env))
 }
 
 #[rustler::nif]
