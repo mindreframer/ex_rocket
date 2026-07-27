@@ -135,6 +135,18 @@ jobs:
         shell: bash
         run: scripts/package_precompiled_nif.sh "$PROJECT_VERSION" "${{ matrix.nif }}" "${{ matrix.job.target }}"
 
+      - name: Smoke test musl NIF
+        if: contains(matrix.job.target, 'musl')
+        shell: bash
+        env:
+          TARGET: ${{ matrix.job.target }}
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/work:ro" \
+            --env NIF_PATH="/work/native/rocker/target/$TARGET/release/librocker.so" \
+            hexpm/elixir:1.15.7-erlang-26.2.3-alpine-3.19.1 \
+            sh -c 'apk add --no-cache libstdc++ >/dev/null && elixir /work/scripts/smoke_precompiled_nif.exs'
+
       - name: Select artifact
         id: artifact
         shell: bash
