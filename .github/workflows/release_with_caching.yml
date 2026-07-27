@@ -116,14 +116,18 @@ jobs:
               else
                 apt-get update
                 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  build-essential clang libclang-dev pkg-config
+                  build-essential clang-13 libclang-13-dev pkg-config
                 rm -rf /var/lib/apt/lists/*
+                export CC=clang-13
+                export CXX=clang++-13
+                export LIBCLANG_PATH=/usr/lib/llvm-13/lib
               fi
               rustc --version
-              c++ --version
+              "${CXX:-c++}" --version
               rustc -vV | grep -q "^host: $TARGET$"
               cargo build --locked --release
             '
+          sudo chown -R "$(id -u):$(id -g)" "native/rocker/target/$TARGET"
 
       - name: Package Linux target
         if: matrix.job.builder == 'container'
