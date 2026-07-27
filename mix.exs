@@ -65,7 +65,7 @@ defmodule ExRocket.MixProject do
         ".formatter.exs",
         "mix.exs",
         "README*",
-        "CHEATSHEET*",
+        "CHEATSHEET.md",
         "LICENSE*",
         "CHANGELOG*"
       ]

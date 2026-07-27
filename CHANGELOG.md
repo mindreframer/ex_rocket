@@ -1,12 +1,10 @@
 # 0.4.0 - 2026-07-27
 
-- Replaced the unmaintained `rocksdb 0.24` binding with maintained
-  `rust-rocksdb 0.51`, bundling RocksDB 11.1.2.
-- Bound the established `ExRocket` API directly to the maintained native backend.
-- Removed the duplicate legacy Rust crate, temporary migration module, duplicate
-  tests, and release artifacts after the unchanged legacy test suite passed
-  against the new backend.
-- Added representative bidirectional RocksDB 10.4.2/11.1.2 migration checks.
+- Updated the native storage integration to `rust-rocksdb 0.51`, bundling
+  RocksDB 11.1.2.
+- Preserved the established `ExRocket` API.
+- Added precompiled NIFs for ARM64 and x86-64 Linux with glibc or musl, including
+  Alpine Linux smoke tests.
 - Raised the source-build requirement to Rust 1.91.
 
 # 0.3.1
