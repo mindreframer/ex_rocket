@@ -1,6 +1,6 @@
 # ADR001: Upgrade To The Maintained rust-rocksdb Crate
 
-- **Status:** Accepted
+- **Status:** Accepted and implemented
 - **Date:** 2026-07-27
 - **Decision owners:** ExRocket maintainers
 
@@ -109,6 +109,14 @@ this project.
 
 Rejected because it would duplicate substantial work already maintained and
 tested by `rust-rocksdb`.
+
+## Implementation Outcome
+
+The existing ExRocket suite passed unchanged after `ExRocket` was routed through
+the maintained backend. The unmaintained native implementation was then removed.
+The maintained crate now occupies the canonical `native/rocker` path and produces
+the canonical `rocker` artifact. `ExRocket` remains the primary facade, while
+`ExRocket.RustRocksDB` is the single NIF-owning module.
 
 ## Verification Required Before Legacy Removal
 

@@ -1,3 +1,13 @@
+# Unreleased
+
+- Replaced the unmaintained `rocksdb 0.24` binding with maintained
+  `rust-rocksdb 0.51`, bundling RocksDB 11.1.2.
+- Routed the established `ExRocket` API through the maintained native backend.
+- Removed the duplicate legacy Rust crate and release artifacts after the
+  unchanged legacy test suite passed against the new backend.
+- Added representative bidirectional RocksDB 10.4.2/11.1.2 migration checks.
+- Raised the source-build requirement to Rust 1.91.
+
 # 0.3.1
 
 - Dependencies: Upgraded rust-rocksdb from 0.22.0 to 0.24.0

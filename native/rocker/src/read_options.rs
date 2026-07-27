@@ -40,7 +40,7 @@ impl From<RockerReadOptions> for ReadOptions {
             read_opts.set_iterate_upper_bound(opts.iterate_upper_bound.unwrap());
         }
         if !opts.iterate_lower_bound.is_none() {
-            read_opts.set_iterate_upper_bound(opts.iterate_lower_bound.unwrap());
+            read_opts.set_iterate_lower_bound(opts.iterate_lower_bound.unwrap());
         }
 
         read_opts

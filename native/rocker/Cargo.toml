@@ -1,16 +1,18 @@
 [package]
 name = "rocker"
 version = "0.3.1"
-authors = ["Maxim Molchanov <m.molchanov@vonmo.com>"]
+edition = "2024"
+rust-version = "1.91.0"
+authors = ["Roman Heinrich"]
 license = "MIT/Apache-2.0"
 
 [lib]
 name = "rocker"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 
 [dependencies]
-libc = "0.2"
-rustler = { version = "0.32.1", features = ["nif_version_2_16"]}
-rocksdb = { version = "0.24" }
-serde = { version = "1.0", features = ["derive"] }
 eetf = "0.6"
+libc = "0.2"
+rocksdb = { package = "rust-rocksdb", version = "0.51.0" }
+rustler = { version = "0.36.2", features = ["nif_version_2_16"] }
+serde = { version = "1.0", features = ["derive"] }

@@ -3,10 +3,10 @@ defmodule ExRocket.RustRocksDBParityTest do
 
   @backends [ExRocket, ExRocket.RustRocksDB]
 
-  test "maintained module exposes exactly the legacy public API" do
-    legacy = MapSet.new(ExRocket.__info__(:functions))
-    maintained = MapSet.new(ExRocket.RustRocksDB.__info__(:functions))
-    assert maintained == legacy
+  test "direct module exposes exactly the primary public API" do
+    primary = MapSet.new(ExRocket.__info__(:functions))
+    direct = MapSet.new(ExRocket.RustRocksDB.__info__(:functions))
+    assert direct == primary
   end
 
   for backend <- @backends do

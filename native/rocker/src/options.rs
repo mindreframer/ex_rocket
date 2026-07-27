@@ -1,8 +1,8 @@
+use crate::merge::{bitset_merge, counter_merge, erlang_merge};
 use libc::{c_double, c_int, c_uint, size_t};
 use rocksdb::{DBCompactionStyle, DBCompressionType, DBRecoveryMode, LogLevel, Options};
 use rustler::{Decoder, NifResult, Term};
 use serde::{Deserialize, Serialize};
-use crate::merge::{counter_merge, erlang_merge, bitset_merge};
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct RockerOptions {
@@ -718,11 +718,7 @@ impl From<RockerOptions> for Options {
             }
             db_opts.set_max_bytes_for_level_multiplier_additional(v.as_slice());
         }
-        if !opts.set_skip_checking_sst_file_sizes_on_db_open.is_none() {
-            db_opts.set_skip_checking_sst_file_sizes_on_db_open(
-                opts.set_skip_checking_sst_file_sizes_on_db_open.unwrap(),
-            );
-        }
+        // Removed from RocksDB 11: SST file sizes are always checked during open.
         if !opts.set_max_write_buffer_size_to_maintain.is_none() {
             db_opts.set_max_write_buffer_size_to_maintain(
                 opts.set_max_write_buffer_size_to_maintain.unwrap(),

@@ -12,7 +12,7 @@ defmodule ExRocket.RustRocksDB do
 
   use RustlerPrecompiled,
     otp_app: :ex_rocket,
-    crate: "rocker_maintained",
+    crate: "rocker",
     base_url: "https://github.com/mindreframer/ex_rocket/releases/download/v#{@version}",
     nif_versions: ["2.16", "2.17"],
     targets: ~w(

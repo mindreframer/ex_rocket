@@ -1,7 +1,7 @@
 # ExRocket
 
 [![Tests](https://github.com/mindreframer/ex_rocket/actions/workflows/elixir.yml/badge.svg?branch=main)](https://github.com/mindreframer/ex_rocket/actions/workflows/elixir.yml)
-[![Build precompiled NIFs](https://github.com/mindreframer/ex_rocket/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/mindreframer/ex_rocket/actions/workflows/release.yml)
+[![Build precompiled NIFs](https://github.com/mindreframer/ex_rocket/actions/workflows/release_with_caching.yml/badge.svg?branch=main)](https://github.com/mindreframer/ex_rocket/actions/workflows/release_with_caching.yml)
 
 ## About
 
@@ -16,28 +16,18 @@ def deps do
 end
 ```
 
-## Backends and versions
+## Backend and version
 
-ExRocket ships two independent modules so the stable and maintained bindings can
-be tested and benchmarked side by side:
+ExRocket uses the actively maintained `rust-rocksdb` package:
 
-| Elixir module | Native crate | Rust package | Bundled RocksDB |
+| Public module | Native crate | Rust package | Bundled RocksDB |
 | --- | --- | --- | --- |
-| `ExRocket` | `native/rocker` | `rocksdb 0.24` | 10.4.2 |
-| `ExRocket.RustRocksDB` | `native/rocker_maintained` | `rust-rocksdb 0.51` | 11.1.2 |
+| `ExRocket` | `native/rocker` | `rust-rocksdb 0.51` | 11.1.2 |
 
-Both modules expose the same function names and arities. They use distinct NIF
-resources and native libraries; no transparent runtime switch or shared database
-handle is involved. New integrations can call `ExRocket.RustRocksDB` directly,
-while existing `ExRocket` callers remain unchanged.
-
-Run the comparative benchmark with:
-
-```sh
-RUSTUP_TOOLCHAIN=1.91.0 FORCE_BUILD=yes MIX_ENV=dev mix run benchmark/compare.exs
-```
-
-Use `BENCH_TIME` and `BENCH_WARMUP` to shorten or extend a run.
+`ExRocket` is the primary API and delegates to `ExRocket.RustRocksDB`; both
+modules therefore use the same maintained NIF and expose the same function
+inventory. The former `rocksdb 0.24` / RocksDB 10.4.2 native implementation was
+used during migration validation and has been removed.
 
 ## Supported OS
 * Linux
@@ -65,47 +55,43 @@ Use `BENCH_TIME` and `BENCH_WARMUP` to shorten or extend a run.
 * Functionality
 
 ## Performance
-In a set of tests you can find a performance test. It demonstrates about 135k write RPS and 2.1M read RPS on my machine. In real conditions we might expect something about 50k write RPS and 400k read RPS with average amount of data being about 1 kB per key and the total number of keys exceeding 1 billion.
+
+The maintained backend's hot-key microbenchmark on an Apple M3 Ultra measured
+approximately 2.46 million reads/second and 470,000 writes/second. Real workloads
+will vary with key/value size, cache hit rate, durability settings, compaction,
+and storage hardware.
 
 ## Build Information
 ExRocket requires
 * Erlang >= 24.
-* Rust >= 1.91 for the maintained backend (pinned by `rust-toolchain.toml`).
+* Rust >= 1.91 (pinned by `rust-toolchain.toml`).
 * Clang >= 15.
 
 
 ## Release
 - bump the version in `mix.exs`
-- bump the version in both native `Cargo.toml` files
+- bump the version in `native/rocker/Cargo.toml`
 - tag a release `git tag v0.3.0`
 - push the tag: `git push mindrefamer v0.3.0`
 - wait for the compiled libs to be uploaded (takes around 15 minutes if all goes well)
-- run `mix rustler_precompiled.download ExRocket --all`
 - run `mix rustler_precompiled.download ExRocket.RustRocksDB --all`
-- verify both checksum files and both distinctly named NIF artifact sets
+- verify the generated checksum file and NIF artifact set
 - now you can publish: `mix hex.publish`
 
-## Parallel backend validation and rollback
+## Validation
 
-Run `scripts/roadmap001_check.sh` to format, source-build, and test both backends.
-Set `RUN_BENCHMARK_SMOKE=1` to include a short comparative benchmark. Because the
-implementations are separate modules and crates, rollback is simply returning
-callers to `ExRocket`; removing the maintained experiment does not require
-rewriting the legacy backend.
+Run `scripts/roadmap001_check.sh` to format, source-build, and test the native
+backend. The original ExRocket tests run unchanged through the `ExRocket` facade
+and therefore exercise the maintained NIF.
 
 ## On-disk compatibility
 
-A lightweight bidirectional check verifies the database formats used by the
-legacy RocksDB 10.4.2 backend and maintained RocksDB 11.1.2 backend:
-
-```sh
-scripts/check_rocksdb_compatibility.sh
-```
-
-The check writes with each backend in a separate BEAM process, closes the
-database, and reads it with the other backend. It covers binary and Unicode
-values, empty and larger values, Erlang external terms, write batches,
-deletions, column families, and CF batches. Both directions currently pass:
+Before removing the old native crate, a lightweight bidirectional migration
+check was executed against RocksDB 10.4.2 and RocksDB 11.1.2. It wrote with each
+backend in a separate BEAM process, closed the database, and read it with the
+other backend. It covered binary and Unicode values, empty and larger values,
+Erlang external terms, write batches, deletions, column families, and CF
+batches. Both directions passed:
 
 ```text
 RocksDB 10.4.2 write -> RocksDB 11.1.2 read: PASS
