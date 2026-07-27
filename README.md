@@ -12,7 +12,7 @@ ExRocket is a logical continuation of [Rocker](https://github.com/Vonmo/rocker) 
 The package can be installed by adding `ex_rocket` to your list of dependencies in `mix.exs`:
 ```
 def deps do
-  [{:ex_rocket, "~> 0.3"}]
+  [{:ex_rocket, "~> 0.4"}]
 end
 ```
 
@@ -70,8 +70,8 @@ ExRocket requires
 ## Release
 - bump the version in `mix.exs`
 - bump the version in `native/rocker/Cargo.toml`
-- tag a release `git tag v0.3.0`
-- push the tag: `git push mindrefamer v0.3.0`
+- tag a release `git tag v0.4.0`
+- push the tag: `git push origin v0.4.0`
 - wait for the compiled libs to be uploaded (takes around 15 minutes if all goes well)
 - run `mix rustler_precompiled.download ExRocket --all`
 - verify the generated checksum file and NIF artifact set

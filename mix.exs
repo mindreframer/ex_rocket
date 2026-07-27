@@ -1,7 +1,7 @@
 defmodule ExRocket.MixProject do
   use Mix.Project
 
-  @version "0.3.1"
+  @version "0.4.0"
   @source_url "https://github.com/mindreframer/ex_rocket"
   @changelog_url "https://github.com/mindreframer/ex_rocket/blob/main/CHANGELOG.md"
 
@@ -13,7 +13,7 @@ defmodule ExRocket.MixProject do
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       description: "RocksDB wrapper for Elixir (based on Rust driver) - fork from ExRock",
-      source_ref: @version,
+      source_ref: "v#{@version}",
       source_url: @source_url,
       deps: deps(),
       package: package(),
@@ -73,7 +73,7 @@ defmodule ExRocket.MixProject do
 
   defp docs do
     [
-      main: "ex_rocket",
+      main: "ExRocket",
       extras: ["README.md", "CHANGELOG.md", "CHEATSHEET.md"]
     ]
   end

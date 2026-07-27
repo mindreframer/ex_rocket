@@ -1,4 +1,4 @@
-# Unreleased
+# 0.4.0 - 2026-07-27
 
 - Replaced the unmaintained `rocksdb 0.24` binding with maintained
   `rust-rocksdb 0.51`, bundling RocksDB 11.1.2.
