@@ -4,9 +4,9 @@ use crate::atoms::{
 use crate::options::RockerOptions;
 use crate::read_options::RockerReadOptions;
 use rocksdb::{
+    DB, DBIterator, Direction, IteratorMode, Options, ReadOptions, Snapshot, WriteBatch,
     backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
     checkpoint::Checkpoint,
-    Direction, DBIterator, IteratorMode, Options, ReadOptions, Snapshot, WriteBatch, DB,
 };
 use rustler::types::list::ListIterator;
 use rustler::{Binary, Encoder, Env, NifResult, OwnedBinary, Resource, ResourceArc, Term};
@@ -47,7 +47,9 @@ impl IteratorResource {
 
 impl DbResource {
     fn new(db: DB) -> Self {
-        Self { db: RwLock::new(db) }
+        Self {
+            db: RwLock::new(db),
+        }
     }
 
     fn read(&self) -> RwLockReadGuard<'_, DB> {
@@ -71,10 +73,7 @@ pub fn lxcode(env: Env) -> NifResult<Term> {
 }
 
 #[rustler::nif]
-pub fn latest_sequence_number(
-    env: Env,
-    resource: ResourceArc<DbResource>,
-) -> NifResult<Term> {
+pub fn latest_sequence_number(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
     Ok((ok(), resource.read().latest_sequence_number()).encode(env))
 }
 
@@ -87,11 +86,7 @@ pub fn open(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn open_for_read_only(
-    env: Env,
-    path: String,
-    options: RockerOptions,
-) -> NifResult<Term> {
+pub fn open_for_read_only(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
     match DB::open_for_read_only(&Options::from(options), path, false) {
         Ok(db) => Ok((ok(), ResourceArc::new(DbResource::new(db))).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
@@ -204,7 +199,10 @@ pub fn write_batch<'a>(
 
     for operation in operations {
         let terms = rustler::types::tuple::get_tuple(operation)?;
-        let name = terms.first().ok_or(rustler::Error::BadArg)?.atom_to_string()?;
+        let name = terms
+            .first()
+            .ok_or(rustler::Error::BadArg)?
+            .atom_to_string()?;
         match name.as_str() {
             "put" if terms.len() == 3 => {
                 let key: Binary = terms[1].decode()?;
@@ -316,7 +314,9 @@ pub fn create_cf(
 }
 
 fn decode_cf_names(term: Term<'_>) -> NifResult<Vec<String>> {
-    term.decode::<ListIterator>()?.map(|name| name.decode()).collect()
+    term.decode::<ListIterator>()?
+        .map(|name| name.decode())
+        .collect()
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
@@ -359,11 +359,7 @@ pub fn list_cf(env: Env, path: String, options: RockerOptions) -> NifResult<Term
 }
 
 #[rustler::nif]
-pub fn drop_cf(
-    env: Env,
-    resource: ResourceArc<DbResource>,
-    name: String,
-) -> NifResult<Term> {
+pub fn drop_cf(env: Env, resource: ResourceArc<DbResource>, name: String) -> NifResult<Term> {
     match resource.write().drop_cf(&name) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
@@ -458,7 +454,10 @@ pub fn multi_get_cf<'a>(
             if tuple.len() != 2 {
                 return Err(rustler::Error::BadArg);
             }
-            Ok((tuple[0].decode()?, tuple[1].decode::<Binary>()?.as_slice().to_vec()))
+            Ok((
+                tuple[0].decode()?,
+                tuple[1].decode::<Binary>()?.as_slice().to_vec(),
+            ))
         })
         .collect();
     let decoded = decoded?;
@@ -502,9 +501,19 @@ pub fn key_may_exist_cf<'a>(
 
 fn iterator_mode<'a>(mode: Term<'a>) -> NifResult<(String, Option<Vec<u8>>, Direction)> {
     let terms = rustler::types::tuple::get_tuple(mode)?;
-    let name = terms.first().ok_or(rustler::Error::BadArg)?.atom_to_string()?;
+    let name = terms
+        .first()
+        .ok_or(rustler::Error::BadArg)?
+        .atom_to_string()?;
     let key = if name == "from" {
-        Some(terms.get(1).ok_or(rustler::Error::BadArg)?.decode::<Binary>()?.as_slice().to_vec())
+        Some(
+            terms
+                .get(1)
+                .ok_or(rustler::Error::BadArg)?
+                .decode::<Binary>()?
+                .as_slice()
+                .to_vec(),
+        )
     } else {
         None
     };
@@ -554,13 +563,19 @@ pub fn iterator_range<'a>(
     read_options: RockerReadOptions,
 ) -> NifResult<Term<'a>> {
     let mut read_options = ReadOptions::from(read_options);
-    let from_key = from.decode::<Binary>().ok().map(|value| value.as_slice().to_vec());
-    let to_key = to.decode::<Binary>().ok().map(|value| value.as_slice().to_vec());
+    let from_key = from
+        .decode::<Binary>()
+        .ok()
+        .map(|value| value.as_slice().to_vec());
+    let to_key = to
+        .decode::<Binary>()
+        .ok()
+        .map(|value| value.as_slice().to_vec());
     match (from_key.as_deref(), to_key.as_deref()) {
         (Some(from), Some(to)) => read_options.set_iterate_range(from..to),
         (Some(from), None) => read_options.set_iterate_range(from..),
         (None, Some(to)) => read_options.set_iterate_range(..to),
-        (None, None) => {},
+        (None, None) => {}
     }
 
     let (name, key, direction) = iterator_mode(mode)?;
@@ -645,11 +660,7 @@ pub fn snapshot(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> 
 }
 
 #[rustler::nif]
-pub fn snapshot_get<'a>(
-    env: Env<'a>,
-    resource: Term<'a>,
-    key: Binary<'a>,
-) -> NifResult<Term<'a>> {
+pub fn snapshot_get<'a>(env: Env<'a>, resource: Term<'a>, key: Binary<'a>) -> NifResult<Term<'a>> {
     match decode_snapshot(resource)?.lock().get(key.as_slice()) {
         Ok(Some(value)) => {
             let mut output = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
@@ -724,7 +735,10 @@ pub fn snapshot_multi_get_cf<'a>(
             if tuple.len() != 2 {
                 return Err(rustler::Error::BadArg);
             }
-            Ok((tuple[0].decode()?, tuple[1].decode::<Binary>()?.as_slice().to_vec()))
+            Ok((
+                tuple[0].decode()?,
+                tuple[1].decode::<Binary>()?.as_slice().to_vec(),
+            ))
         })
         .collect();
     let decoded = decoded?;
@@ -824,7 +838,14 @@ fn backup_info<'a>(env: Env<'a>, engine: &BackupEngine) -> Vec<Term<'a>> {
         .get_backup_info()
         .into_iter()
         .map(|item| {
-            (backup(), item.backup_id, item.timestamp, item.size, item.num_files).encode(env)
+            (
+                backup(),
+                item.backup_id,
+                item.timestamp,
+                item.size,
+                item.num_files,
+            )
+                .encode(env)
         })
         .collect()
 }
@@ -836,11 +857,7 @@ fn open_backup_engine(path: &str) -> Result<BackupEngine, rocksdb::Error> {
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn create_backup(
-    env: Env,
-    resource: ResourceArc<DbResource>,
-    path: String,
-) -> NifResult<Term> {
+pub fn create_backup(env: Env, resource: ResourceArc<DbResource>, path: String) -> NifResult<Term> {
     let mut engine = match open_backup_engine(&path) {
         Ok(engine) => engine,
         Err(reason) => return Ok((error(), reason.to_string()).encode(env)),
@@ -860,11 +877,7 @@ pub fn get_backup_info(env: Env, path: String) -> NifResult<Term> {
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn purge_old_backups(
-    env: Env,
-    path: String,
-    keep: usize,
-) -> NifResult<Term> {
+pub fn purge_old_backups(env: Env, path: String, keep: usize) -> NifResult<Term> {
     let mut engine = match open_backup_engine(&path) {
         Ok(engine) => engine,
         Err(reason) => return Ok((error(), reason.to_string()).encode(env)),
@@ -900,10 +913,7 @@ pub fn restore_from_backup(
 }
 
 #[rustler::nif]
-pub fn next<'a>(
-    env: Env<'a>,
-    resource: ResourceArc<IteratorResource>,
-) -> NifResult<Term<'a>> {
+pub fn next<'a>(env: Env<'a>, resource: ResourceArc<IteratorResource>) -> NifResult<Term<'a>> {
     match resource.lock().next() {
         None => Ok(end_of_iterator().encode(env)),
         Some(Ok((key, value))) => {

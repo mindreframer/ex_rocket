@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.91.0
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: "1.15.7"
@@ -66,3 +67,4 @@ jobs:
       - run: FORCE_BUILD=1 mix compile --warnings-as-errors
       - run: mix credo --strict
       - run: FORCE_BUILD=1 mix test
+      - run: cargo fmt --manifest-path native/rocker_maintained/Cargo.toml -- --check

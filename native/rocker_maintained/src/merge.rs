@@ -1,5 +1,5 @@
+use eetf::{FixInteger, Term as EetfTerm};
 use rocksdb::MergeOperands;
-use eetf::{Term as EetfTerm, FixInteger};
 
 /// Counter merge operator that handles string-based integer arithmetic
 pub fn counter_merge(
@@ -9,11 +9,14 @@ pub fn counter_merge(
 ) -> Option<Vec<u8>> {
     let mut result: i64 = match existing_val {
         Some(val) => {
-            match std::str::from_utf8(val).ok().and_then(|s| s.parse::<i64>().ok()) {
+            match std::str::from_utf8(val)
+                .ok()
+                .and_then(|s| s.parse::<i64>().ok())
+            {
                 Some(num) => num,
                 None => 0,
             }
-        },
+        }
         None => 0,
     };
 
@@ -35,9 +38,7 @@ pub fn erlang_merge(
     operands: &MergeOperands,
 ) -> Option<Vec<u8>> {
     // First try ETF term processing
-    let mut current_eetf_term = existing_val.and_then(|val| {
-        EetfTerm::decode(val).ok()
-    });
+    let mut current_eetf_term = existing_val.and_then(|val| EetfTerm::decode(val).ok());
 
     let mut is_etf_processing = false;
 
@@ -62,11 +63,14 @@ pub fn erlang_merge(
     // Fallback to counter behavior for simple string operations
     let mut result: i64 = match existing_val {
         Some(val) => {
-            match std::str::from_utf8(val).ok().and_then(|s| s.parse::<i64>().ok()) {
+            match std::str::from_utf8(val)
+                .ok()
+                .and_then(|s| s.parse::<i64>().ok())
+            {
                 Some(num) => num,
                 None => 0,
             }
-        },
+        }
         None => 0,
     };
 
@@ -82,7 +86,10 @@ pub fn erlang_merge(
 }
 
 /// Process ETF merge operations for tuple-based operations
-fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfTerm) -> Option<EetfTerm> {
+fn process_eetf_merge_operation(
+    existing_value: Option<EetfTerm>,
+    operand: EetfTerm,
+) -> Option<EetfTerm> {
     // Try to parse operand as a tuple (operation_atom, value)
     if let EetfTerm::Tuple(tuple) = operand {
         if tuple.elements.len() >= 2 {
@@ -101,18 +108,24 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
 
                         if let EetfTerm::FixInteger(add_value) = &tuple.elements[1] {
                             let result = existing_int + (add_value.value as i64);
-                            return Some(EetfTerm::FixInteger(FixInteger { value: result as i32 }));
+                            return Some(EetfTerm::FixInteger(FixInteger {
+                                value: result as i32,
+                            }));
                         }
                     }
                     "list_append" => {
                         // Handle list append
                         let mut existing_list = match &existing_value {
                             Some(EetfTerm::List(list)) => list.clone(),
-                            _ => eetf::List { elements: Vec::new() },
+                            _ => eetf::List {
+                                elements: Vec::new(),
+                            },
                         };
 
                         if let EetfTerm::List(append_list) = &tuple.elements[1] {
-                            existing_list.elements.extend_from_slice(&append_list.elements);
+                            existing_list
+                                .elements
+                                .extend_from_slice(&append_list.elements);
                             return Some(EetfTerm::List(existing_list));
                         }
                     }
@@ -120,7 +133,9 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         // Handle list prepend (add elements to the beginning)
                         let mut existing_list = match &existing_value {
                             Some(EetfTerm::List(list)) => list.clone(),
-                            _ => eetf::List { elements: Vec::new() },
+                            _ => eetf::List {
+                                elements: Vec::new(),
+                            },
                         };
 
                         if let EetfTerm::List(prepend_list) = &tuple.elements[1] {
@@ -135,14 +150,16 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         // Handle list subtract (remove elements)
                         let mut existing_list = match &existing_value {
                             Some(EetfTerm::List(list)) => list.clone(),
-                            _ => eetf::List { elements: Vec::new() },
+                            _ => eetf::List {
+                                elements: Vec::new(),
+                            },
                         };
 
                         if let EetfTerm::List(subtract_list) = &tuple.elements[1] {
                             // Remove elements that are in subtract_list
-                            existing_list.elements.retain(|elem| {
-                                !subtract_list.elements.contains(elem)
-                            });
+                            existing_list
+                                .elements
+                                .retain(|elem| !subtract_list.elements.contains(elem));
                             return Some(EetfTerm::List(existing_list));
                         }
                     }
@@ -150,11 +167,15 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         // Handle list set (set element at position)
                         let mut existing_list = match &existing_value {
                             Some(EetfTerm::List(list)) => list.clone(),
-                            _ => eetf::List { elements: Vec::new() },
+                            _ => eetf::List {
+                                elements: Vec::new(),
+                            },
                         };
 
                         if tuple.elements.len() >= 3 {
-                            if let (EetfTerm::FixInteger(pos), new_value) = (&tuple.elements[1], &tuple.elements[2]) {
+                            if let (EetfTerm::FixInteger(pos), new_value) =
+                                (&tuple.elements[1], &tuple.elements[2])
+                            {
                                 let index = pos.value as usize;
                                 if index < existing_list.elements.len() {
                                     existing_list.elements[index] = new_value.clone();
@@ -167,7 +188,9 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         // Handle list delete (single position or range)
                         let mut existing_list = match &existing_value {
                             Some(EetfTerm::List(list)) => list.clone(),
-                            _ => eetf::List { elements: Vec::new() },
+                            _ => eetf::List {
+                                elements: Vec::new(),
+                            },
                         };
 
                         if tuple.elements.len() >= 2 {
@@ -178,7 +201,9 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                                     // Range delete: {list_delete, start, end}
                                     if let EetfTerm::FixInteger(end_pos) = &tuple.elements[2] {
                                         let end_index = end_pos.value as usize;
-                                        if start_index < existing_list.elements.len() && end_index <= existing_list.elements.len() {
+                                        if start_index < existing_list.elements.len()
+                                            && end_index <= existing_list.elements.len()
+                                        {
                                             existing_list.elements.drain(start_index..end_index);
                                         }
                                     }
@@ -196,11 +221,15 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         // Handle list insert (insert elements at position)
                         let mut existing_list = match &existing_value {
                             Some(EetfTerm::List(list)) => list.clone(),
-                            _ => eetf::List { elements: Vec::new() },
+                            _ => eetf::List {
+                                elements: Vec::new(),
+                            },
                         };
 
                         if tuple.elements.len() >= 3 {
-                            if let (EetfTerm::FixInteger(pos), EetfTerm::List(insert_list)) = (&tuple.elements[1], &tuple.elements[2]) {
+                            if let (EetfTerm::FixInteger(pos), EetfTerm::List(insert_list)) =
+                                (&tuple.elements[1], &tuple.elements[2])
+                            {
                                 let index = pos.value as usize;
                                 if index <= existing_list.elements.len() {
                                     // Insert elements at the specified position
@@ -220,7 +249,9 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         };
 
                         if let EetfTerm::Binary(append_binary) = &tuple.elements[1] {
-                            existing_binary.bytes.extend_from_slice(&append_binary.bytes);
+                            existing_binary
+                                .bytes
+                                .extend_from_slice(&append_binary.bytes);
                             return Some(EetfTerm::Binary(existing_binary));
                         }
                     }
@@ -232,12 +263,16 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         };
 
                         if tuple.elements.len() >= 3 {
-                            if let (EetfTerm::FixInteger(pos), EetfTerm::FixInteger(count)) = (&tuple.elements[1], &tuple.elements[2]) {
+                            if let (EetfTerm::FixInteger(pos), EetfTerm::FixInteger(count)) =
+                                (&tuple.elements[1], &tuple.elements[2])
+                            {
                                 let start_pos = pos.value as usize;
                                 let erase_count = count.value as usize;
                                 let end_pos = start_pos + erase_count;
 
-                                if start_pos <= existing_binary.bytes.len() && end_pos <= existing_binary.bytes.len() {
+                                if start_pos <= existing_binary.bytes.len()
+                                    && end_pos <= existing_binary.bytes.len()
+                                {
                                     existing_binary.bytes.drain(start_pos..end_pos);
                                 }
                                 return Some(EetfTerm::Binary(existing_binary));
@@ -252,7 +287,9 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         };
 
                         if tuple.elements.len() >= 3 {
-                            if let (EetfTerm::FixInteger(pos), EetfTerm::Binary(insert_binary)) = (&tuple.elements[1], &tuple.elements[2]) {
+                            if let (EetfTerm::FixInteger(pos), EetfTerm::Binary(insert_binary)) =
+                                (&tuple.elements[1], &tuple.elements[2])
+                            {
                                 let insert_pos = pos.value as usize;
 
                                 if insert_pos <= existing_binary.bytes.len() {
@@ -273,13 +310,19 @@ fn process_eetf_merge_operation(existing_value: Option<EetfTerm>, operand: EetfT
                         };
 
                         if tuple.elements.len() >= 4 {
-                            if let (EetfTerm::FixInteger(pos), EetfTerm::FixInteger(count), EetfTerm::Binary(replace_binary)) =
-                                (&tuple.elements[1], &tuple.elements[2], &tuple.elements[3]) {
+                            if let (
+                                EetfTerm::FixInteger(pos),
+                                EetfTerm::FixInteger(count),
+                                EetfTerm::Binary(replace_binary),
+                            ) = (&tuple.elements[1], &tuple.elements[2], &tuple.elements[3])
+                            {
                                 let start_pos = pos.value as usize;
                                 let replace_count = count.value as usize;
                                 let end_pos = start_pos + replace_count;
 
-                                if start_pos <= existing_binary.bytes.len() && end_pos <= existing_binary.bytes.len() {
+                                if start_pos <= existing_binary.bytes.len()
+                                    && end_pos <= existing_binary.bytes.len()
+                                {
                                     // Remove the bytes to be replaced
                                     existing_binary.bytes.drain(start_pos..end_pos);
 

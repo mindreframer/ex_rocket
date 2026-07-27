@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 7.1: Verify public API inventory.
-- [ ] Phase 7.2: Add dual-backend behavioral parity coverage.
-- [ ] Phase 7.3: Add error/resource/concurrency coverage.
-- [ ] Phase 7.4: Add comparative benchmarks.
-- [ ] Phase 7.5: Complete CI and release wiring.
-- [ ] Phase 7.6: Complete backend documentation.
-- [ ] Phase 7.7: Run final gates and commit.
+- [x] Phase 7.1: Verify public API inventory.
+- [x] Phase 7.2: Add dual-backend behavioral parity coverage.
+- [x] Phase 7.3: Add error/resource/concurrency coverage.
+- [x] Phase 7.4: Add comparative benchmarks.
+- [x] Phase 7.5: Complete CI and release wiring.
+- [x] Phase 7.6: Complete backend documentation.
+- [x] Phase 7.7: Run final gates and commit.
 
 ## Implementation Steps
 
@@ -22,8 +22,8 @@
 
 ## Quality Gate
 
-- [ ] API parity check passes.
-- [ ] Full tests pass.
-- [ ] Both native builds pass.
-- [ ] Benchmark smoke passes.
-- [ ] Documentation is complete.
+- [x] API parity check passes.
+- [x] Full tests pass.
+- [x] Both native builds pass.
+- [x] Benchmark smoke passes.
+- [x] Documentation is complete.

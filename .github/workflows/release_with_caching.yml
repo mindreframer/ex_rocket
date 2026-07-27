@@ -9,12 +9,15 @@ on:
 
 jobs:
   build_release:
-    name: NIF ${{ matrix.nif }} - ${{ matrix.job.target }} (${{ matrix.job.os }})
+    name: ${{ matrix.backend.name }} NIF ${{ matrix.nif }} - ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
       matrix:
         nif: ["2.16", "2.17"]
+        backend:
+          - { name: legacy, project: rocker, dir: native/rocker }
+          - { name: maintained, project: rocker_maintained, dir: native/rocker_maintained }
         job:
           - { target: aarch64-apple-darwin, os: macos-13 }
           - { target: x86_64-apple-darwin, os: macos-13 }
@@ -79,7 +82,7 @@ jobs:
       - name: Install minimal stable with clippy and rustfmt
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.91.0"
           components: rustfmt, clippy
           target: ${{ matrix.job.target }}
 
@@ -101,11 +104,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            native/rocker/target
-          key: cargo-build-${{ matrix.job.target }}-${{ matrix.nif }}-${{ hashFiles('**/Cargo.lock', 'native/rocker/src/**') }}
+            ${{ matrix.backend.dir }}/target
+          key: cargo-build-${{ matrix.backend.name }}-${{ matrix.job.target }}-${{ matrix.nif }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            cargo-build-${{ matrix.job.target }}-${{ matrix.nif }}-
-            cargo-build-${{ matrix.job.target }}-
+            cargo-build-${{ matrix.backend.name }}-${{ matrix.job.target }}-${{ matrix.nif }}-
+            cargo-build-${{ matrix.backend.name }}-${{ matrix.job.target }}-
 
       # Cross compilation cache (if using cross)
       - name: Cache Cross docker images
@@ -120,12 +123,12 @@ jobs:
         id: build-crate
         uses: philss/rustler-precompiled-action@v1.0.1
         with:
-          project-name: rocker
+          project-name: ${{ matrix.backend.project }}
           project-version: ${{ env.PROJECT_VERSION }}
           target: ${{ matrix.job.target }}
           nif-version: ${{ matrix.nif }}
           use-cross: ${{ matrix.job.use-cross }}
-          project-dir: "native/rocker"
+          project-dir: ${{ matrix.backend.dir }}
 
       - name: Artifact upload
         uses: actions/upload-artifact@v4

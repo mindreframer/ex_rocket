@@ -1,8 +1,8 @@
+use crate::merge::{bitset_merge, counter_merge, erlang_merge};
 use libc::{c_double, c_int, c_uint, size_t};
 use rocksdb::{DBCompactionStyle, DBCompressionType, DBRecoveryMode, LogLevel, Options};
 use rustler::{Decoder, NifResult, Term};
 use serde::{Deserialize, Serialize};
-use crate::merge::{counter_merge, erlang_merge, bitset_merge};
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct RockerOptions {

@@ -1,5 +1,7 @@
 # ROADMAP001: Parallel Maintained rust-rocksdb Backend
 
+**Status:** Completed — all seven epics implemented and validated.
+
 ## Objective
 
 Add a second, independent ExRocket implementation backed by the maintained [`rust-rocksdb`](https://github.com/zaidoon1/rust-rocksdb) crate. The existing `ExRocket` module and `native/rocker` crate remain intact throughout the work. The new backend is exposed as `ExRocket.RustRocksDB` and implemented by a separate `native/rocker_maintained` Rust NIF crate.
@@ -128,3 +130,12 @@ The two native crates deliberately remain independent. Duplication is acceptable
 - Comparative benchmarks exist for both modules.
 - Build and release documentation covers both native libraries.
 - Seven independently tested epic commits exist.
+
+## Completion Summary
+
+- Legacy backend: `ExRocket` / `native/rocker` / RocksDB 10.4.2.
+- Maintained backend: `ExRocket.RustRocksDB` / `native/rocker_maintained` / RocksDB 11.1.2.
+- Public function name/arity parity is exact and enforced by tests.
+- Functional, merge, option, CF, snapshot, checkpoint, backup, concurrency, and error-path tests cover the maintained backend.
+- `benchmark/compare.exs` compares equivalent read/write workloads.
+- CI, package contents, release artifacts, checksums, validation, and rollback are documented and wired.

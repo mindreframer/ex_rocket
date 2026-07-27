@@ -16,11 +16,28 @@ def deps do
 end
 ```
 
-## Versions
-| ExRocket   | RocksDB | rust-rocksdb | 
-| -------- | ------- | ------- |
-| 0.3.x  | 10.4.2    | 0.24.x |
+## Backends and versions
 
+ExRocket ships two independent modules so the stable and maintained bindings can
+be tested and benchmarked side by side:
+
+| Elixir module | Native crate | Rust package | Bundled RocksDB |
+| --- | --- | --- | --- |
+| `ExRocket` | `native/rocker` | `rocksdb 0.24` | 10.4.2 |
+| `ExRocket.RustRocksDB` | `native/rocker_maintained` | `rust-rocksdb 0.51` | 11.1.2 |
+
+Both modules expose the same function names and arities. They use distinct NIF
+resources and native libraries; no transparent runtime switch or shared database
+handle is involved. New integrations can call `ExRocket.RustRocksDB` directly,
+while existing `ExRocket` callers remain unchanged.
+
+Run the comparative benchmark with:
+
+```sh
+RUSTUP_TOOLCHAIN=1.91.0 FORCE_BUILD=yes MIX_ENV=dev mix run benchmark/compare.exs
+```
+
+Use `BENCH_TIME` and `BENCH_WARMUP` to shorten or extend a run.
 
 ## Supported OS
 * Linux
@@ -53,18 +70,28 @@ In a set of tests you can find a performance test. It demonstrates about 135k wr
 ## Build Information
 ExRocket requires
 * Erlang >= 24.
-* Rust >= 1.76.
+* Rust >= 1.91 for the maintained backend (pinned by `rust-toolchain.toml`).
 * Clang >= 15.
 
 
 ## Release
 - bump the version in `mix.exs`
-- bump the version in `native/rocker/Cargo.toml`
+- bump the version in both native `Cargo.toml` files
 - tag a release `git tag v0.3.0`
 - push the tag: `git push mindrefamer v0.3.0`
 - wait for the compiled libs to be uploaded (takes around 15 minutes if all goes well)
-- run `mix rustler_precompiled.download ExRocket --all` to download all libs + generate `checksum-Elixir.ExRocket.exs`
+- run `mix rustler_precompiled.download ExRocket --all`
+- run `mix rustler_precompiled.download ExRocket.RustRocksDB --all`
+- verify both checksum files and both distinctly named NIF artifact sets
 - now you can publish: `mix hex.publish`
+
+## Parallel backend validation and rollback
+
+Run `scripts/roadmap001_check.sh` to format, source-build, and test both backends.
+Set `RUN_BENCHMARK_SMOKE=1` to include a short comparative benchmark. Because the
+implementations are separate modules and crates, rollback is simply returning
+callers to `ExRocket`; removing the maintained experiment does not require
+rewriting the legacy backend.
 
 
 ## Status
