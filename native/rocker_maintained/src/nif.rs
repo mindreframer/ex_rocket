@@ -2,6 +2,7 @@ use crate::atoms::{
     backup, end_of_iterator, error, maintained, ok, snap, undefined, unknown_cf, vsn1,
 };
 use crate::options::RockerOptions;
+use crate::read_options::RockerReadOptions;
 use rocksdb::{
     backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
     checkpoint::Checkpoint,
@@ -160,6 +161,37 @@ pub fn delete<'a>(
     }
 }
 
+#[rustler::nif]
+pub fn merge<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    key: Binary<'a>,
+    operand: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    match resource.read().merge(key.as_slice(), operand.as_slice()) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn merge_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    key: Binary<'a>,
+    operand: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    match guard.merge_cf(cf, key.as_slice(), operand.as_slice()) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
 #[rustler::nif(schedule = "DirtyIo")]
 pub fn write_batch<'a>(
     env: Env<'a>,
@@ -195,6 +227,18 @@ pub fn write_batch<'a>(
                 let key: Binary = terms[2].decode()?;
                 let cf = guard.cf_handle(&cf_name).ok_or(rustler::Error::BadArg)?;
                 batch.delete_cf(cf, key.as_slice());
+            }
+            "merge" if terms.len() == 3 => {
+                let key: Binary = terms[1].decode()?;
+                let operand: Binary = terms[2].decode()?;
+                batch.merge(key.as_slice(), operand.as_slice());
+            }
+            "merge_cf" if terms.len() == 4 => {
+                let cf_name: String = terms[1].decode()?;
+                let key: Binary = terms[2].decode()?;
+                let operand: Binary = terms[3].decode()?;
+                let cf = guard.cf_handle(&cf_name).ok_or(rustler::Error::BadArg)?;
+                batch.merge_cf(cf, key.as_slice(), operand.as_slice());
             }
             _ => return Err(rustler::Error::BadArg),
         }
@@ -507,16 +551,16 @@ pub fn iterator_range<'a>(
     mode: Term<'a>,
     from: Term<'a>,
     to: Term<'a>,
-    _read_options: Term<'a>,
+    read_options: RockerReadOptions,
 ) -> NifResult<Term<'a>> {
-    let mut read_options = ReadOptions::default();
+    let mut read_options = ReadOptions::from(read_options);
     let from_key = from.decode::<Binary>().ok().map(|value| value.as_slice().to_vec());
     let to_key = to.decode::<Binary>().ok().map(|value| value.as_slice().to_vec());
     match (from_key.as_deref(), to_key.as_deref()) {
         (Some(from), Some(to)) => read_options.set_iterate_range(from..to),
         (Some(from), None) => read_options.set_iterate_range(from..),
         (None, Some(to)) => read_options.set_iterate_range(..to),
-        (None, None) => read_options.set_iterate_range(..),
+        (None, None) => {},
     }
 
     let (name, key, direction) = iterator_mode(mode)?;

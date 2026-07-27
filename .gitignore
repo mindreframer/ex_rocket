@@ -29,3 +29,5 @@ ex_rock-*.tar
 core
 
 checksum*
+# Rust build artifacts (including native crates built directly).
+**/target/

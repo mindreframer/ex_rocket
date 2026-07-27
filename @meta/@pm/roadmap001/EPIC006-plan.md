@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 6.1: Port merge framework.
-- [ ] Phase 6.2: Implement default merges.
-- [ ] Phase 6.3: Implement CF merges.
-- [ ] Phase 6.4: Port all existing operators.
-- [ ] Phase 6.5: Port database/table options.
-- [ ] Phase 6.6: Port read options and validation.
-- [ ] Phase 6.7: Test and commit.
+- [x] Phase 6.1: Port merge framework.
+- [x] Phase 6.2: Implement default merges.
+- [x] Phase 6.3: Implement CF merges.
+- [x] Phase 6.4: Port all existing operators.
+- [x] Phase 6.5: Port database/table options.
+- [x] Phase 6.6: Port read options and validation.
+- [x] Phase 6.7: Test and commit.
 
 ## Implementation Steps
 
@@ -22,6 +22,6 @@
 
 ## Quality Gate
 
-- [ ] Merge tests pass.
-- [ ] Option tests pass.
-- [ ] Full suite passes.
+- [x] Merge tests pass.
+- [x] Option tests pass.
+- [x] Full suite passes.

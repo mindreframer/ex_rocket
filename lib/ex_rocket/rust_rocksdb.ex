@@ -53,6 +53,16 @@ defmodule ExRocket.RustRocksDB do
   end
 
   def delete(_db_ref, _key), do: Erlang.nif_error(:nif_not_loaded)
+  def merge(_db_ref, _key, _operand), do: Erlang.nif_error(:nif_not_loaded)
+
+  def mergeb(db_ref, key, operand),
+    do: merge(db_ref, key, :erlang.term_to_binary(operand))
+
+  def merge_cf(_db_ref, _cf_name, _key, _operand), do: Erlang.nif_error(:nif_not_loaded)
+
+  def merge_cfb(db_ref, cf_name, key, operand),
+    do: merge_cf(db_ref, cf_name, key, :erlang.term_to_binary(operand))
+
   def write_batch(_db_ref, _operations), do: Erlang.nif_error(:nif_not_loaded)
   def delete_range(_db_ref, _from, _to), do: Erlang.nif_error(:nif_not_loaded)
   def multi_get(_db_ref, _keys), do: Erlang.nif_error(:nif_not_loaded)

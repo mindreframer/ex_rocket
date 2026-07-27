@@ -11,5 +11,8 @@ name = "rocker_maintained"
 crate-type = ["cdylib"]
 
 [dependencies]
-rustler = { version = "0.36.2", features = ["nif_version_2_16"] }
+eetf = "0.6"
+libc = "0.2"
 rocksdb = { package = "rust-rocksdb", version = "0.51.0" }
+rustler = { version = "0.36.2", features = ["nif_version_2_16"] }
+serde = { version = "1.0", features = ["derive"] }
