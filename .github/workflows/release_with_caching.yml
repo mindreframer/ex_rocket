@@ -121,7 +121,7 @@ jobs:
               fi
               rustc --version
               c++ --version
-              test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+              rustc -vV | grep -q "^host: $TARGET$"
               cargo build --locked --release
             '
 
