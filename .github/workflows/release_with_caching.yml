@@ -1,6 +1,7 @@
 name: Build precompiled NIFs
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -19,10 +20,13 @@ jobs:
         # expose newer NIF versions.
         nif: ["2.16"]
         job:
-          - { target: aarch64-apple-darwin, os: macos-14 }
-          - { target: x86_64-apple-darwin, os: macos-14 }
-          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
-          - { target: x86_64-pc-windows-msvc, os: windows-2022 }
+          - { target: aarch64-apple-darwin, os: macos-14, builder: native }
+          - { target: x86_64-apple-darwin, os: macos-14, builder: native }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-bullseye" }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-alpine3.22" }
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, builder: container, image: "rust:1.91.0-bullseye" }
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-22.04, builder: container, image: "rust:1.91.0-alpine3.22" }
+          - { target: x86_64-pc-windows-msvc, os: windows-2022, builder: native }
 
     steps:
       - name: Checkout source code
@@ -31,11 +35,10 @@ jobs:
       - name: Extract project version
         shell: bash
         run: |
-          # Get the project version from mix.exs
-          echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> $GITHUB_ENV
+          echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> "$GITHUB_ENV"
 
-      # Cache Rust toolchain
       - name: Cache Rust toolchain
+        if: matrix.job.builder == 'native'
         uses: actions/cache@v5
         with:
           path: |
@@ -48,12 +51,11 @@ jobs:
             rust-toolchain-
 
       - name: Install Rust toolchain
+        if: matrix.job.builder == 'native'
         uses: dtolnay/rust-toolchain@1.91.0
         with:
-          components: rustfmt, clippy
           targets: ${{ matrix.job.target }}
 
-      # Cache Cargo registry and dependencies
       - name: Cache Cargo registry
         uses: actions/cache@v5
         with:
@@ -66,39 +68,93 @@ jobs:
             cargo-registry-${{ matrix.job.target }}-
             cargo-registry-
 
-      # Cache build artifacts (target directory)
       - name: Cache Cargo build
         uses: actions/cache@v5
         with:
-          path: |
-            native/rocker/target
+          path: native/rocker/target
           key: cargo-build-${{ matrix.job.target }}-${{ matrix.nif }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             cargo-build-${{ matrix.job.target }}-${{ matrix.nif }}-
             cargo-build-${{ matrix.job.target }}-
 
-      - name: Build the project
-        id: build-crate
+      - name: Build native target
+        if: matrix.job.builder == 'native'
+        id: build-native
         uses: philss/rustler-precompiled-action@v1.1.5
         with:
           project-name: rocker
           project-version: ${{ env.PROJECT_VERSION }}
           target: ${{ matrix.job.target }}
           nif-version: ${{ matrix.nif }}
-          # Passing the unset matrix value avoids a composite-action bug where
-          # its boolean `false` default is treated as a truthy string.
+          # An unset value avoids a composite-action bug where its boolean
+          # `false` default is treated as a truthy string.
           use-cross: ${{ matrix.job.use-cross }}
           project-dir: native/rocker
 
-      - name: Artifact upload
+      - name: Build Linux target in C++20 container
+        if: matrix.job.builder == 'container'
+        shell: bash
+        env:
+          CONTAINER_IMAGE: ${{ matrix.job.image }}
+          TARGET: ${{ matrix.job.target }}
+        run: |
+          mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/work" \
+            --volume "$HOME/.cargo/registry:/usr/local/cargo/registry" \
+            --volume "$HOME/.cargo/git:/usr/local/cargo/git" \
+            --workdir /work/native/rocker \
+            --env CARGO_INCREMENTAL=0 \
+            --env CARGO_TARGET_DIR="/work/native/rocker/target/$TARGET" \
+            --env RUSTFLAGS="-C target-feature=-crt-static" \
+            --env TARGET="$TARGET" \
+            "$CONTAINER_IMAGE" \
+            sh -c '
+              set -eu
+              if [ -f /etc/alpine-release ]; then
+                apk add --no-cache build-base clang-dev llvm-dev linux-headers pkgconf
+              else
+                apt-get update
+                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                  build-essential clang libclang-dev pkg-config
+                rm -rf /var/lib/apt/lists/*
+              fi
+              rustc --version
+              c++ --version
+              test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
+              cargo build --locked --release
+            '
+
+      - name: Package Linux target
+        if: matrix.job.builder == 'container'
+        id: package-linux
+        shell: bash
+        run: scripts/package_precompiled_nif.sh "$PROJECT_VERSION" "${{ matrix.nif }}" "${{ matrix.job.target }}"
+
+      - name: Select artifact
+        id: artifact
+        shell: bash
+        env:
+          NATIVE_NAME: ${{ steps.build-native.outputs.file-name }}
+          NATIVE_PATH: ${{ steps.build-native.outputs.file-path }}
+          LINUX_NAME: ${{ steps.package-linux.outputs.file-name }}
+          LINUX_PATH: ${{ steps.package-linux.outputs.file-path }}
+        run: |
+          name="${NATIVE_NAME:-$LINUX_NAME}"
+          path="${NATIVE_PATH:-$LINUX_PATH}"
+          test -n "$name"
+          test -f "$path"
+          echo "file-name=$name" >> "$GITHUB_OUTPUT"
+          echo "file-path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.build-crate.outputs.file-name }}
-          path: ${{ steps.build-crate.outputs.file-path }}
+          name: ${{ steps.artifact.outputs.file-name }}
+          path: ${{ steps.artifact.outputs.file-path }}
 
-      - name: Publish archives and packages
+      - name: Publish release artifact
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ${{ steps.build-crate.outputs.file-path }}
-        if: startsWith(github.ref, 'refs/tags/')
+          files: ${{ steps.artifact.outputs.file-path }}
