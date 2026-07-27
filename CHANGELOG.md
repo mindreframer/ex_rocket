@@ -1,3 +1,10 @@
+# 0.4.1 - 2026-07-27
+
+- Reworked the README with concise, tested examples for key/value operations,
+  atomic batches, multi-get, and column families.
+- Added prominent links to the comprehensive ExRocket cheatsheet.
+- Explicitly included `CHEATSHEET.md` in Hex package and ExDoc output.
+
 # 0.4.0 - 2026-07-27
 
 - Updated the native storage integration to `rust-rocksdb 0.51`, bundling
