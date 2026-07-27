@@ -1,9 +1,9 @@
-use crate::atoms::{end_of_iterator, error, maintained, ok, undefined, vsn1};
+use crate::atoms::{end_of_iterator, error, maintained, ok, undefined, unknown_cf, vsn1};
 use crate::options::RockerOptions;
 use rocksdb::{Direction, DBIterator, IteratorMode, Options, ReadOptions, WriteBatch, DB};
 use rustler::types::list::ListIterator;
 use rustler::{Binary, Encoder, Env, NifResult, OwnedBinary, Resource, ResourceArc, Term};
-use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub struct DbResource {
     db: RwLock<DB>,
@@ -31,6 +31,10 @@ impl DbResource {
 
     fn read(&self) -> RwLockReadGuard<'_, DB> {
         self.db.read().unwrap()
+    }
+
+    fn write(&self) -> RwLockWriteGuard<'_, DB> {
+        self.db.write().unwrap()
     }
 }
 
@@ -141,6 +145,7 @@ pub fn write_batch<'a>(
     operations: Term<'a>,
 ) -> NifResult<Term<'a>> {
     let operations: ListIterator = operations.decode()?;
+    let guard = resource.read();
     let mut batch = WriteBatch::default();
 
     for operation in operations {
@@ -156,12 +161,25 @@ pub fn write_batch<'a>(
                 let key: Binary = terms[1].decode()?;
                 batch.delete(key.as_slice());
             }
+            "put_cf" if terms.len() == 4 => {
+                let cf_name: String = terms[1].decode()?;
+                let key: Binary = terms[2].decode()?;
+                let value: Binary = terms[3].decode()?;
+                let cf = guard.cf_handle(&cf_name).ok_or(rustler::Error::BadArg)?;
+                batch.put_cf(cf, key.as_slice(), value.as_slice());
+            }
+            "delete_cf" if terms.len() == 3 => {
+                let cf_name: String = terms[1].decode()?;
+                let key: Binary = terms[2].decode()?;
+                let cf = guard.cf_handle(&cf_name).ok_or(rustler::Error::BadArg)?;
+                batch.delete_cf(cf, key.as_slice());
+            }
             _ => return Err(rustler::Error::BadArg),
         }
     }
 
     let applied = batch.len();
-    match resource.read().write(&batch) {
+    match guard.write(&batch) {
         Ok(()) => Ok((ok(), applied).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -216,6 +234,204 @@ pub fn key_may_exist<'a>(
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
     Ok((ok(), resource.read().key_may_exist(key.as_slice())).encode(env))
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn create_cf(
+    env: Env,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    options: RockerOptions,
+) -> NifResult<Term> {
+    match resource.write().create_cf(name, &Options::from(options)) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+fn decode_cf_names(term: Term<'_>) -> NifResult<Vec<String>> {
+    term.decode::<ListIterator>()?.map(|name| name.decode()).collect()
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn open_cf<'a>(
+    env: Env<'a>,
+    path: String,
+    names: Term<'a>,
+    options: RockerOptions,
+) -> NifResult<Term<'a>> {
+    match DB::open_cf(&Options::from(options), path, decode_cf_names(names)?) {
+        Ok(db) => Ok((ok(), ResourceArc::new(DbResource::new(db))).encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn open_cf_for_read_only<'a>(
+    env: Env<'a>,
+    path: String,
+    names: Term<'a>,
+    options: RockerOptions,
+) -> NifResult<Term<'a>> {
+    match DB::open_cf_for_read_only(
+        &Options::from(options),
+        path,
+        decode_cf_names(names)?,
+        false,
+    ) {
+        Ok(db) => Ok((ok(), ResourceArc::new(DbResource::new(db))).encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn list_cf(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
+    match DB::list_cf(&Options::from(options), path) {
+        Ok(names) => Ok((ok(), names).encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn drop_cf(
+    env: Env,
+    resource: ResourceArc<DbResource>,
+    name: String,
+) -> NifResult<Term> {
+    match resource.write().drop_cf(&name) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn put_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    key: Binary<'a>,
+    value: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    match guard.put_cf(cf, key.as_slice(), value.as_slice()) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn get_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    match guard.get_cf(cf, key.as_slice()) {
+        Ok(Some(value)) => {
+            let mut output = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
+            output.as_mut_slice().copy_from_slice(value.as_ref());
+            Ok((ok(), output.release(env)).encode(env))
+        }
+        Ok(None) => Ok(undefined().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn delete_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    match guard.delete_cf(cf, key.as_slice()) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn delete_range_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    from: Binary<'a>,
+    to: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    match guard.delete_range_cf(cf, from.as_slice(), to.as_slice()) {
+        Ok(()) => Ok(ok().encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+pub fn multi_get_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    keys: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let decoded: NifResult<Vec<(String, Vec<u8>)>> = keys
+        .decode::<ListIterator>()?
+        .map(|item| {
+            let tuple = rustler::types::tuple::get_tuple(item)?;
+            if tuple.len() != 2 {
+                return Err(rustler::Error::BadArg);
+            }
+            Ok((tuple[0].decode()?, tuple[1].decode::<Binary>()?.as_slice().to_vec()))
+        })
+        .collect();
+    let decoded = decoded?;
+    let guard = resource.read();
+    let mut requests = Vec::with_capacity(decoded.len());
+    for (name, key) in &decoded {
+        let Some(cf) = guard.cf_handle(name) else {
+            return Ok((error(), unknown_cf()).encode(env));
+        };
+        requests.push((cf, key.as_slice()));
+    }
+    let values = guard.multi_get_cf(requests);
+    let mut output = Vec::with_capacity(values.len());
+    for value in values {
+        match value {
+            Ok(Some(value)) => {
+                let mut binary = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
+                binary.as_mut_slice().copy_from_slice(value.as_ref());
+                output.push((ok(), binary.release(env)).encode(env));
+            }
+            Ok(None) => output.push(undefined().encode(env)),
+            Err(reason) => output.push((error(), reason.to_string()).encode(env)),
+        }
+    }
+    Ok((ok(), output).encode(env))
+}
+
+#[rustler::nif]
+pub fn key_may_exist_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    Ok((ok(), guard.key_may_exist_cf(cf, key.as_slice())).encode(env))
 }
 
 fn iterator_mode<'a>(mode: Term<'a>) -> NifResult<(String, Option<Vec<u8>>, Direction)> {
@@ -299,6 +515,43 @@ pub fn prefix_iterator<'a>(
 ) -> NifResult<Term<'a>> {
     let guard = resource.read();
     let iterator = guard.prefix_iterator(prefix.as_slice());
+    let iterator = make_iterator_resource(resource.clone(), iterator);
+    Ok((ok(), iterator).encode(env))
+}
+
+#[rustler::nif]
+pub fn iterator_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    mode: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let (mode_name, key, direction) = iterator_mode(mode)?;
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    let iterator = match (mode_name.as_str(), key.as_deref()) {
+        ("end", _) => guard.iterator_cf(cf, IteratorMode::End),
+        ("from", Some(key)) => guard.iterator_cf(cf, IteratorMode::From(key, direction)),
+        _ => guard.iterator_cf(cf, IteratorMode::Start),
+    };
+    let iterator = make_iterator_resource(resource.clone(), iterator);
+    Ok((ok(), iterator).encode(env))
+}
+
+#[rustler::nif]
+pub fn prefix_iterator_cf<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    name: String,
+    prefix: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let guard = resource.read();
+    let Some(cf) = guard.cf_handle(&name) else {
+        return Ok((error(), unknown_cf()).encode(env));
+    };
+    let iterator = guard.prefix_iterator_cf(cf, prefix.as_slice());
     let iterator = make_iterator_resource(resource.clone(), iterator);
     Ok((ok(), iterator).encode(env))
 }

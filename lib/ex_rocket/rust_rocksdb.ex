@@ -64,4 +64,36 @@ defmodule ExRocket.RustRocksDB do
 
   def prefix_iterator(_db_ref, _prefix), do: Erlang.nif_error(:nif_not_loaded)
   def next(_iterator_ref), do: Erlang.nif_error(:nif_not_loaded)
+
+  def create_cf(_db_ref, _cf_name, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
+  def open_cf(_path, _cf_names, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
+
+  def open_cf_for_read_only(_path, _cf_names, _options \\ %{}),
+    do: Erlang.nif_error(:nif_not_loaded)
+
+  def list_cf(_path, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
+  def drop_cf(_db_ref, _cf_name), do: Erlang.nif_error(:nif_not_loaded)
+  def put_cf(_db_ref, _cf_name, _key, _value), do: Erlang.nif_error(:nif_not_loaded)
+  def get_cf(_db_ref, _cf_name, _key), do: Erlang.nif_error(:nif_not_loaded)
+
+  def get_cf(db_ref, cf_name, key, default) do
+    case get_cf(db_ref, cf_name, key) do
+      :undefined -> {:ok, default}
+      result -> result
+    end
+  end
+
+  def get_cfb(db_ref, cf_name, key) do
+    case get_cf(db_ref, cf_name, key) do
+      :undefined -> :undefined
+      {:ok, value} -> {:ok, :erlang.binary_to_term(value)}
+    end
+  end
+
+  def delete_cf(_db_ref, _cf_name, _key), do: Erlang.nif_error(:nif_not_loaded)
+  def delete_range_cf(_db_ref, _cf_name, _from, _to), do: Erlang.nif_error(:nif_not_loaded)
+  def multi_get_cf(_db_ref, _keys), do: Erlang.nif_error(:nif_not_loaded)
+  def key_may_exist_cf(_db_ref, _cf_name, _key), do: Erlang.nif_error(:nif_not_loaded)
+  def iterator_cf(_db_ref, _cf_name, _mode), do: Erlang.nif_error(:nif_not_loaded)
+  def prefix_iterator_cf(_db_ref, _cf_name, _prefix), do: Erlang.nif_error(:nif_not_loaded)
 end

@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 4.1: Implement CF lifecycle.
-- [ ] Phase 4.2: Implement writable and read-only CF open.
-- [ ] Phase 4.3: Implement CF writes.
-- [ ] Phase 4.4: Implement CF reads and helpers.
-- [ ] Phase 4.5: Implement CF bulk operations.
-- [ ] Phase 4.6: Implement CF iterators.
-- [ ] Phase 4.7: Test and commit.
+- [x] Phase 4.1: Implement CF lifecycle.
+- [x] Phase 4.2: Implement writable and read-only CF open.
+- [x] Phase 4.3: Implement CF writes.
+- [x] Phase 4.4: Implement CF reads and helpers.
+- [x] Phase 4.5: Implement CF bulk operations.
+- [x] Phase 4.6: Implement CF iterators.
+- [x] Phase 4.7: Test and commit.
 
 ## Implementation Steps
 
@@ -22,6 +22,6 @@
 
 ## Quality Gate
 
-- [ ] CF lifecycle tests pass.
-- [ ] CF data tests pass.
-- [ ] Full suite passes.
+- [x] CF lifecycle tests pass.
+- [x] CF data tests pass.
+- [x] Full suite passes.

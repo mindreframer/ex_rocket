@@ -4,5 +4,6 @@ rustler::atoms! {
     maintained,
     ok,
     undefined,
+    unknown_cf,
     vsn1
 }
