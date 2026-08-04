@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 7.1: Verify the end-to-end checkpoint protocol.
-- [ ] Phase 7.2: Execute the complete failure matrix.
-- [ ] Phase 7.3: Run concurrency and native-lifecycle stress.
-- [ ] Phase 7.4: Publish comparative operational benchmarks.
-- [ ] Phase 7.5: Build and smoke-test the precompiled artifact matrix.
-- [ ] Phase 7.6: Complete package and release preparation.
-- [ ] Phase 7.7: Run final gates and commit.
+- [x] Phase 7.1: Verify the end-to-end checkpoint protocol.
+- [x] Phase 7.2: Execute the complete failure matrix.
+- [x] Phase 7.3: Run concurrency and native-lifecycle stress.
+- [x] Phase 7.4: Publish comparative operational benchmarks.
+- [x] Phase 7.5: Build and smoke-test the precompiled artifact matrix.
+- [x] Phase 7.6: Complete package and release preparation.
+- [x] Phase 7.7: Run final gates and commit.
 
 ## Implementation Steps
 
@@ -22,10 +22,10 @@
 
 ## Quality Gate
 
-- [ ] Failure and checkpoint matrices pass.
-- [ ] Concurrency/race stress passes.
-- [ ] Benchmarks are published with reproducible context.
-- [ ] Every configured artifact builds and smoke-tests.
-- [ ] Package and release documentation are complete.
-- [ ] Complete source and release gates pass.
-- [ ] Only EPIC007 changes are committed.
+- [x] Failure and checkpoint matrices pass.
+- [x] Concurrency/race stress passes.
+- [x] Benchmarks are published with reproducible context.
+- [x] Every configured artifact builds and smoke-tests.
+- [x] Package and release documentation are complete.
+- [x] Complete source and release gates pass.
+- [x] Only EPIC007 changes are committed.

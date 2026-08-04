@@ -1,6 +1,6 @@
 # ROADMAP002: Consistency, Durability, And Lifecycle Improvements
 
-**Status:** Proposed
+**Status:** Complete (ExRocket 0.5.0)
 
 ## Objective
 

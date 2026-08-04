@@ -24,7 +24,7 @@ stubs =
     end
   end)
 
-nif_path = System.fetch_env!("NIF_PATH") |> String.trim_trailing(".so")
+nif_path = System.fetch_env!("NIF_PATH") |> Path.rootname()
 
 {:module, ExRocket, _binary, _term} =
   Module.create(
@@ -38,4 +38,61 @@ nif_path = System.fetch_env!("NIF_PATH") |> String.trim_trailing(".so")
   )
 
 unless ExRocket.lxcode() == {:ok, :vsn1}, do: raise("unexpected NIF response")
-IO.puts("NIF smoke test passed: #{nif_path}")
+
+path =
+  Path.join(
+    System.tmp_dir!(),
+    "ex_rocket_precompiled_smoke_#{System.unique_integer([:positive, :monotonic])}"
+  )
+
+{:error, {:unknown_option, :misspelled_option}} =
+  ExRocket.open(path, %{misspelled_option: true})
+
+{:ok, db} = ExRocket.open(path, %{})
+
+{:ok, 2} =
+  ExRocket.write_batch(
+    db,
+    [{:put, "key/1", "value/1"}, {:put, "key/2", "value/2"}],
+    %{sync: true}
+  )
+
+:ok = ExRocket.flush_wal(db, true)
+{:ok, "value/1"} = ExRocket.get(db, "key/1")
+:ok = ExRocket.close(db)
+:ok = ExRocket.close(db)
+{:error, :closed} = ExRocket.get(db, "key/1")
+
+{:ok, scan_db} = ExRocket.open(path, %{})
+parent = self()
+
+spawn(fn ->
+  {:ok, iterator} = ExRocket.iterator(scan_db, {:start})
+  {:ok, rows, :end_of_iterator} = ExRocket.iterator_take(iterator, %{max_entries: 10})
+  send(parent, {:rows, rows})
+end)
+
+receive do
+  {:rows, [{"key/1", "value/1"}, {"key/2", "value/2"}]} -> :ok
+end
+
+eventually_close = fn
+  _close_attempt, 0 ->
+    raise "iterator lease was not released"
+
+  close_attempt, attempts ->
+    case ExRocket.close(scan_db) do
+      :ok ->
+        :ok
+
+      {:error, :resource_busy} ->
+        :erlang.garbage_collect()
+        Process.sleep(10)
+        close_attempt.(close_attempt, attempts - 1)
+    end
+end
+
+:ok = eventually_close.(eventually_close, 100)
+:ok = ExRocket.destroy(path, %{})
+
+IO.puts("NIF functional smoke test passed: #{nif_path}")

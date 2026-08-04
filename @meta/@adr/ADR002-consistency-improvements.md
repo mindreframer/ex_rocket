@@ -1,9 +1,9 @@
 # ADR002: Consistency, Durability, And Lifecycle Improvements
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-04
 - **Decision owners:** ExRocket maintainers
-- **Target release:** Next backward-compatible feature release where possible; use a minor-version boundary for intentionally stricter option validation
+- **Target release:** ExRocket 0.5.0
 
 ## Context
 

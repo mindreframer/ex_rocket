@@ -25,6 +25,7 @@ ex_rock-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 /priv/native/
+/release-artifacts/
 
 core
 

@@ -1,7 +1,7 @@
 defmodule ExRocket.MixProject do
   use Mix.Project
 
-  @version "0.4.1"
+  @version "0.5.0"
   @source_url "https://github.com/mindreframer/ex_rocket"
   @changelog_url "https://github.com/mindreframer/ex_rocket/blob/main/CHANGELOG.md"
 

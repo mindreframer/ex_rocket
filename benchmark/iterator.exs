@@ -33,14 +33,24 @@ defmodule ExRocket.IteratorBenchmark do
         {:ok, take_iterator} = ExRocket.iterator(db, {:start})
         {take_us, take_rows} = :timer.tc(fn -> count_take(take_iterator, page_size, 0) end)
 
-        send(parent, {:results, next_us, next_rows, take_us, take_rows})
+        {:ok, snapshot} = ExRocket.snapshot(db)
+        {:ok, snapshot_iterator} = ExRocket.snapshot_iterator(snapshot, {:start})
+
+        {snapshot_us, snapshot_rows} =
+          :timer.tc(fn -> count_take(snapshot_iterator, page_size, 0) end)
+
+        send(
+          parent,
+          {:results, next_us, next_rows, take_us, take_rows, snapshot_us, snapshot_rows}
+        )
       end)
 
     receive do
-      {:results, next_us, next_rows, take_us, take_rows} ->
+      {:results, next_us, next_rows, take_us, take_rows, snapshot_us, snapshot_rows} ->
         IO.puts("rows=#{count} page_size=#{page_size}")
         IO.puts("next/1: #{next_rows} rows in #{next_us} us")
         IO.puts("iterator_take/2: #{take_rows} rows in #{take_us} us")
+        IO.puts("snapshot iterator_take/2: #{snapshot_rows} rows in #{snapshot_us} us")
     end
 
     receive do

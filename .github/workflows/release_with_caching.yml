@@ -20,8 +20,8 @@ jobs:
         # expose newer NIF versions.
         nif: ["2.16"]
         job:
-          - { target: aarch64-apple-darwin, os: macos-14, builder: native }
-          - { target: x86_64-apple-darwin, os: macos-14, builder: native }
+          - { target: aarch64-apple-darwin, os: macos-15, builder: native }
+          - { target: x86_64-apple-darwin, os: macos-15-intel, builder: native }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-bullseye" }
           - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-alpine3.22" }
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, builder: container, image: "rust:1.91.0-bullseye" }
@@ -36,6 +36,13 @@ jobs:
         shell: bash
         run: |
           echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> "$GITHUB_ENV"
+
+      - name: Install BEAM for native and glibc smoke tests
+        if: ${{ !contains(matrix.job.target, 'musl') }}
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.15.7"
+          otp-version: "26.2.3"
 
       - name: Cache Rust toolchain
         if: matrix.job.builder == 'native'
@@ -162,6 +169,34 @@ jobs:
           test -f "$path"
           echo "file-name=$name" >> "$GITHUB_OUTPUT"
           echo "file-path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test packaged NIF
+        if: ${{ !contains(matrix.job.target, 'musl') }}
+        shell: bash
+        env:
+          ARTIFACT_PATH: ${{ steps.artifact.outputs.file-path }}
+          TARGET: ${{ matrix.job.target }}
+        run: |
+          rm -rf nif-smoke
+          mkdir nif-smoke
+          tar -xzf "$ARTIFACT_PATH" -C nif-smoke
+          nif_path=$(find nif-smoke -type f | head -n1)
+          test -n "$nif_path"
+          if [[ "$TARGET" == *-pc-windows-* ]]; then
+            nif_path=$(cygpath -w "$nif_path")
+          fi
+          NIF_PATH="$nif_path" elixir scripts/smoke_precompiled_nif.exs
+
+      - name: Record artifact checksum
+        shell: bash
+        env:
+          ARTIFACT_PATH: ${{ steps.artifact.outputs.file-path }}
+        run: |
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$ARTIFACT_PATH"
+          else
+            shasum -a 256 "$ARTIFACT_PATH"
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

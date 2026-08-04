@@ -1,4 +1,4 @@
-# 0.5.0 - Unreleased
+# 0.5.0 - 2026-08-04
 
 - Added explicit batch durability through `write_batch/3` and synchronous or
   non-synchronous WAL boundaries through `flush_wal/2`.

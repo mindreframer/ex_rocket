@@ -142,12 +142,13 @@ Other targets can build from source with `FORCE_BUILD=1` and the build requireme
 
 - Key/value operations
 - Column families
-- Atomic batch writes
-- Flexible database options
-- Range and prefix iterators
+- Atomic batch writes with explicit sync/WAL options
+- Exact, validated database options
+- Range, prefix, and bounded bulk iterators
 - Range deletion
 - Multi-get
 - Snapshots
+- Deterministic safe database close
 - Checkpoints
 - Backup API
 - Counter, Erlang term, and bitset merge operators
@@ -178,12 +179,15 @@ Run `scripts/roadmap002_check.sh` to clean, format, source-build, and test ExRoc
 ## Release
 
 1. Bump the version in `mix.exs` and `native/rocker/Cargo.toml`.
-2. Tag the release, for example: `git tag v0.4.1`.
-3. Push the tag: `git push origin v0.4.1`.
-4. Wait for all precompiled NIFs to be uploaded.
-5. Run `mix rustler_precompiled.download ExRocket --all`.
-6. Verify the checksum file and NIF artifact set.
-7. Build and publish with `mix hex.publish`.
+2. Run the complete source and package gates.
+3. Dispatch `Build precompiled NIFs` without a tag and verify all seven target
+   artifacts and functional smoke tests.
+4. Download the preflight artifacts, update `checksum-Elixir.ExRocket.exs`, and
+   commit the checksums.
+5. Tag the verified commit, for example `git tag v0.5.0`, and push the tag.
+6. Monitor the tag workflow until all artifacts are attached to the GitHub
+   release, then run `mix rustler_precompiled.download ExRocket --all` locally.
+7. Verify the downloaded checksum file and artifact set before publishing Hex.
 
 ## Status
 

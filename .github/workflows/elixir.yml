@@ -69,4 +69,7 @@ jobs:
       - run: FORCE_BUILD=1 mix compile --warnings-as-errors
       - run: mix credo --strict
       - run: FORCE_BUILD=1 mix test
+      - run: NIF_PATH="$PWD/_build/test/lib/ex_rocket/native/rocker/release/librocker.so" elixir scripts/smoke_precompiled_nif.exs
+      - run: mix hex.build && rm -f ex_rocket-*.tar
       - run: cargo fmt --manifest-path native/rocker/Cargo.toml -- --check
+      - run: cargo check --locked --manifest-path native/rocker/Cargo.toml
