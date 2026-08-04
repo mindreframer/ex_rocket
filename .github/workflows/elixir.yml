@@ -1,75 +1,144 @@
 name: Elixir CI
+
 on:
   push:
-    branches: ["main"]
   pull_request:
-    branches: ["main"]
+
 permissions:
   contents: read
+
+concurrency:
+  group: elixir-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Build and test
-    runs-on: ubuntu-latest
+  qa:
+    name: Source QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.91.0
-        with:
-          components: rustfmt
-      - uses: erlef/setup-beam@v1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           elixir-version: "1.15.7"
           otp-version: "26.2.3"
 
-      # Cache Mix dependencies
-      - name: Cache Mix dependencies
-        uses: actions/cache@v5
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
         with:
-          path: deps
-          key: ${{ runner.os }}-mix-deps-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-deps-
+          toolchain: "1.91.0"
+          components: rustfmt
 
-      # Cache Mix build artifacts
-      - name: Cache Mix build
-        uses: actions/cache@v5
-        with:
-          path: _build
-          key: ${{ runner.os }}-mix-build-${{ hashFiles('**/mix.lock') }}-${{ hashFiles('**/*.ex') }}-${{ hashFiles('**/*.exs') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-build-${{ hashFiles('**/mix.lock') }}-
-            ${{ runner.os }}-mix-build-
-
-      # Cache Rust/Cargo dependencies
-      - name: Cache Rust dependencies
-        uses: actions/cache@v5
+      - name: Cache Mix and Cargo builds
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            native/*/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            deps
+            _build
+            ~/.hex
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/rocker/target
+          key: ${{ runner.os }}-qa-v2-otp26-elixir1.15-rust1.91-${{ hashFiles('mix.lock', 'native/rocker/Cargo.lock') }}-${{ hashFiles('mix.exs', 'lib/**/*.ex', 'test/**/*.exs', 'test/**/*.ex', 'native/rocker/src/**/*.rs') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-qa-v2-otp26-elixir1.15-rust1.91-${{ hashFiles('mix.lock', 'native/rocker/Cargo.lock') }}-
 
-      # Cache PLT files for Dialyxir (if using dialyzer)
-      - name: Cache PLT files
-        uses: actions/cache@v5
+      - name: Fetch dependencies
+        run: |
+          mix local.hex 2.5.1 --force
+          env MIX_ENV=test mix deps.get
+          cargo +1.91.0 fetch --manifest-path native/rocker/Cargo.toml --locked
+
+      - name: Quality gate
+        run: scripts/qa_check.sh
+
+  checksum-manifest:
+    name: Detect precompiled checksum
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      present: ${{ steps.checksum.outputs.present }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Detect published checksum manifest
+        id: checksum
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(checksum-*.exs)
+          test "${#files[@]}" -le 1
+          if test "${#files[@]}" -eq 1; then
+            test "${files[0]}" = "checksum-Elixir.ExRocket.exs"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  precompiled-consumer:
+    name: Precompiled consumer / ${{ matrix.target }}
+    needs: checksum-manifest
+    if: needs.checksum-manifest.outputs.present == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, runner: ubuntu-24.04 }
+          - { target: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm }
+          - { target: aarch64-apple-darwin, runner: macos-15 }
+          - { target: x86_64-apple-darwin, runner: macos-15-intel }
+          - { target: x86_64-pc-windows-msvc, runner: windows-2022 }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
-          path: priv/plts
-          key: ${{ runner.os }}-plt-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-plt-
+          elixir-version: "1.15.7"
+          otp-version: "26.2.3"
 
-      - run: mix deps.get
-      - run: mix format --check-formatted
-      - run: mix deps.unlock --check-unused
-      - run: mix deps.compile
-      - run: FORCE_BUILD=1 mix compile --warnings-as-errors
-      - run: mix credo --strict
-      - run: FORCE_BUILD=1 mix test
-      - run: NIF_PATH="$PWD/_build/test/lib/ex_rocket/native/rocker/release/librocker.so" elixir scripts/smoke_precompiled_nif.exs
-      - run: mix hex.build && rm -f ex_rocket-*.tar
-      - run: cargo fmt --manifest-path native/rocker/Cargo.toml -- --check
-      - run: cargo check --locked --manifest-path native/rocker/Cargo.toml
+      - name: Cache consumer dependencies and downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .ci/consumer/deps
+            .ci/consumer/_build
+            ~/.cache/rustler_precompiled
+            ~/Library/Caches/rustler_precompiled
+            ~/AppData/Local/rustler_precompiled
+          key: precompiled-consumer-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('mix.lock', 'checksum-*.exs', 'lib/**/*.ex', 'mix.exs', 'scripts/smoke_precompiled_consumer.exs') }}
+
+      - name: Compile unpacked package without Rust and smoke public API
+        shell: bash
+        run: |
+          no_rust="$PWD/.no-rust"
+          mkdir -p "$no_rust"
+          for command in cargo rustc; do
+            cat > "$no_rust/$command" <<'EOF'
+          #!/usr/bin/env bash
+          echo "error: precompiled consumer attempted to invoke Rust" >&2
+          exit 97
+          EOF
+            chmod +x "$no_rust/$command"
+          done
+          export PATH="$no_rust:$PATH"
+          unset FORCE_BUILD RUSTLER_PRECOMPILED_FORCE_BUILD_ALL
+          mix local.hex 2.5.1 --force
+
+          rm -rf .ci/precompiled-package
+          mkdir -p .ci/consumer
+          mix hex.build --unpack --output .ci/precompiled-package
+          test -f .ci/precompiled-package/checksum-Elixir.ExRocket.exs
+          cat > .ci/consumer/mix.exs <<'EOF'
+          defmodule ExRocketConsumer.MixProject do
+            use Mix.Project
+            def project, do: [app: :ex_rocket_consumer, version: "0.0.0", elixir: "~> 1.15", deps: deps()]
+            def application, do: [extra_applications: [:logger]]
+            defp deps, do: [{:ex_rocket, path: Path.expand("../precompiled-package", __DIR__)}]
+          end
+          EOF
+
+          cd .ci/consumer
+          MIX_ENV=prod mix deps.get --only prod
+          MIX_ENV=prod mix compile --warnings-as-errors
+          MIX_ENV=prod mix run --no-start ../../scripts/smoke_precompiled_consumer.exs

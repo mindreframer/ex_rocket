@@ -174,20 +174,29 @@ durability settings, compaction, concurrency, and storage hardware.
 
 ## Validation
 
-Run `scripts/roadmap002_check.sh` to clean, format, source-build, and test ExRocket.
+Run `scripts/qa_check.sh` for the staged Elixir, Rust, NIF smoke, and package
+quality gate. Successful dependency setup stays quiet; failures retain their
+complete diagnostic output.
+
+CI uses source-aware Mix/Cargo caches with lockfile restore keys, per-target
+release caches, and no-Rust consumer jobs that compile the unpacked Hex package
+and load each published native artifact through the public API.
 
 ## Release
 
-1. Bump the version in `mix.exs` and `native/rocker/Cargo.toml`.
-2. Run the complete source and package gates.
-3. Dispatch `Build precompiled NIFs` without a tag and verify all seven target
-   artifacts and functional smoke tests.
-4. Download the preflight artifacts, update `checksum-Elixir.ExRocket.exs`, and
-   commit the checksums.
-5. Tag the verified commit, for example `git tag v0.5.0`, and push the tag.
-6. Monitor the tag workflow until all artifacts are attached to the GitHub
-   release, then run `mix rustler_precompiled.download ExRocket --all` locally.
-7. Verify the downloaded checksum file and artifact set before publishing Hex.
+1. Bump the version in `mix.exs` and `native/rocker/Cargo.toml`; verify parity
+   with `scripts/project_version.sh`.
+2. Run `scripts/qa_check.sh` and push the green version commit.
+3. Dispatch `Build precompiled NIFs` with `publish: false`; verify all seven
+   target builds and functional smoke tests.
+4. Dispatch the same workflow with `publish: true`. It validates the exact
+   artifact set and digests in a draft before atomically publishing the tag and
+   GitHub release.
+5. Run `mix clean && mix compile`, followed by
+   `mix rustler_precompiled.download ExRocket --all` locally.
+6. Commit the generated checksum manifest and require all source and
+   no-Rust precompiled-consumer CI jobs to pass.
+7. Inspect the unpacked package before publishing Hex.
 
 ## Status
 

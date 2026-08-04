@@ -2,108 +2,89 @@ name: Build precompiled NIFs
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      publish:
+        description: Publish the configured version after every artifact validates
+        required: true
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: precompiled-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NIF_VERSION: "2.16"
 
 jobs:
-  build_release:
-    name: NIF ${{ matrix.nif }} - ${{ matrix.job.target }} (${{ matrix.job.os }})
-    runs-on: ${{ matrix.job.os }}
+  build:
+    name: NIF 2.16 / ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        # NIF 2.16 supports Erlang/OTP 24 and later, including runtimes that
-        # expose newer NIF versions.
-        nif: ["2.16"]
-        job:
-          - { target: aarch64-apple-darwin, os: macos-15, builder: native }
-          - { target: x86_64-apple-darwin, os: macos-15-intel, builder: native }
-          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-bullseye" }
-          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-alpine3.22" }
-          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, builder: container, image: "rust:1.91.0-bullseye" }
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-22.04, builder: container, image: "rust:1.91.0-alpine3.22" }
-          - { target: x86_64-pc-windows-msvc, os: windows-2022, builder: native }
-
+        include:
+          - { target: aarch64-apple-darwin, runner: macos-15, builder: native }
+          - { target: x86_64-apple-darwin, runner: macos-15-intel, builder: native }
+          - { target: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-bullseye" }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm, builder: container, image: "rust:1.91.0-alpine3.22" }
+          - { target: x86_64-unknown-linux-gnu, runner: ubuntu-22.04, builder: container, image: "rust:1.91.0-bullseye" }
+          - { target: x86_64-unknown-linux-musl, runner: ubuntu-22.04, builder: container, image: "rust:1.91.0-alpine3.22" }
+          - { target: x86_64-pc-windows-msvc, runner: windows-2022, builder: native }
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Extract project version
+      - name: Resolve project version
         shell: bash
-        run: |
-          echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> "$GITHUB_ENV"
+        run: echo "PROJECT_VERSION=$(scripts/project_version.sh)" >> "$GITHUB_ENV"
 
-      - name: Install BEAM for native and glibc smoke tests
-        if: ${{ !contains(matrix.job.target, 'musl') }}
-        uses: erlef/setup-beam@v1
+      - if: ${{ !contains(matrix.target, 'musl') }}
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           elixir-version: "1.15.7"
           otp-version: "26.2.3"
 
-      - name: Cache Rust toolchain
-        if: matrix.job.builder == 'native'
-        uses: actions/cache@v5
+      - name: Cache Cargo registry and target
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
-            ~/.rustup/toolchains
-            ~/.rustup/update-hashes
-            ~/.rustup/settings.toml
-          key: rust-toolchain-${{ matrix.job.target }}-${{ hashFiles('**/Cargo.toml') }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/rocker/target
+          key: precompiled-v2-${{ matrix.target }}-nif2.16-rust1.91-${{ hashFiles('native/rocker/Cargo.lock', 'native/rocker/Cargo.toml') }}-${{ hashFiles('native/rocker/.cargo/config.toml', 'native/rocker/src/**/*.rs') }}
           restore-keys: |
-            rust-toolchain-${{ matrix.job.target }}-
-            rust-toolchain-
+            precompiled-v2-${{ matrix.target }}-nif2.16-rust1.91-${{ hashFiles('native/rocker/Cargo.lock', 'native/rocker/Cargo.toml') }}-
 
-      - name: Install Rust toolchain
-        if: matrix.job.builder == 'native'
-        uses: dtolnay/rust-toolchain@1.91.0
+      - name: Install pinned Rust toolchain
+        if: matrix.builder == 'native'
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
         with:
-          targets: ${{ matrix.job.target }}
+          toolchain: "1.91.0"
+          targets: ${{ matrix.target }}
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: cargo-registry-${{ matrix.job.target }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            cargo-registry-${{ matrix.job.target }}-
-            cargo-registry-
+      - name: Build native artifact
+        if: matrix.builder == 'native'
+        shell: bash
+        run: |
+          cargo +1.91.0 build --manifest-path native/rocker/Cargo.toml \
+            --locked --release --target "${{ matrix.target }}"
 
-      - name: Cache Cargo build
-        uses: actions/cache@v5
-        with:
-          path: native/rocker/target
-          key: cargo-build-${{ matrix.job.target }}-${{ matrix.nif }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-build-${{ matrix.job.target }}-${{ matrix.nif }}-
-            cargo-build-${{ matrix.job.target }}-
+      - name: Package native artifact
+        if: matrix.builder == 'native'
+        id: native
+        shell: bash
+        run: scripts/package_precompiled_nif.sh "$PROJECT_VERSION" "$NIF_VERSION" "${{ matrix.target }}"
 
-      - name: Build native target
-        if: matrix.job.builder == 'native'
-        id: build-native
-        uses: philss/rustler-precompiled-action@v1.1.5
-        with:
-          project-name: rocker
-          project-version: ${{ env.PROJECT_VERSION }}
-          target: ${{ matrix.job.target }}
-          nif-version: ${{ matrix.nif }}
-          # An unset value avoids a composite-action bug where its boolean
-          # `false` default is treated as a truthy string.
-          use-cross: ${{ matrix.job.use-cross }}
-          project-dir: native/rocker
-
-      - name: Build Linux target in C++20 container
-        if: matrix.job.builder == 'container'
+      - name: Build Linux artifact in matching container
+        if: matrix.builder == 'container'
         shell: bash
         env:
-          CONTAINER_IMAGE: ${{ matrix.job.image }}
-          TARGET: ${{ matrix.job.target }}
+          IMAGE: ${{ matrix.image }}
+          TARGET: ${{ matrix.target }}
         run: |
           mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
           docker run --rm \
@@ -115,10 +96,9 @@ jobs:
             --env CARGO_TARGET_DIR="/work/native/rocker/target/$TARGET" \
             --env RUSTFLAGS="-C target-feature=-crt-static" \
             --env TARGET="$TARGET" \
-            "$CONTAINER_IMAGE" \
-            sh -c '
+            "$IMAGE" sh -c '
               set -eu
-              if [ -f /etc/alpine-release ]; then
+              if test -f /etc/alpine-release; then
                 apk add --no-cache build-base clang-dev llvm-dev linux-headers pkgconf
               else
                 apt-get update
@@ -129,83 +109,174 @@ jobs:
                 export CXX=clang++-13
                 export LIBCLANG_PATH=/usr/lib/llvm-13/lib
               fi
-              rustc --version
-              "${CXX:-c++}" --version
               rustc -vV | grep -q "^host: $TARGET$"
               cargo build --locked --release
             '
           sudo chown -R "$(id -u):$(id -g)" "native/rocker/target/$TARGET"
 
-      - name: Package Linux target
-        if: matrix.job.builder == 'container'
-        id: package-linux
+      - name: Package Linux artifact
+        if: matrix.builder == 'container'
+        id: linux
         shell: bash
-        run: scripts/package_precompiled_nif.sh "$PROJECT_VERSION" "${{ matrix.nif }}" "${{ matrix.job.target }}"
+        run: scripts/package_precompiled_nif.sh "$PROJECT_VERSION" "$NIF_VERSION" "${{ matrix.target }}"
 
-      - name: Smoke test musl NIF
-        if: contains(matrix.job.target, 'musl')
-        shell: bash
-        env:
-          TARGET: ${{ matrix.job.target }}
-        run: |
-          docker run --rm \
-            --volume "$GITHUB_WORKSPACE:/work:ro" \
-            --env NIF_PATH="/work/native/rocker/target/$TARGET/release/librocker.so" \
-            hexpm/elixir:1.15.7-erlang-26.2.3-alpine-3.19.1 \
-            sh -c 'apk add --no-cache libstdc++ >/dev/null && elixir /work/scripts/smoke_precompiled_nif.exs'
-
-      - name: Select artifact
+      - name: Select and validate artifact
         id: artifact
         shell: bash
         env:
-          NATIVE_NAME: ${{ steps.build-native.outputs.file-name }}
-          NATIVE_PATH: ${{ steps.build-native.outputs.file-path }}
-          LINUX_NAME: ${{ steps.package-linux.outputs.file-name }}
-          LINUX_PATH: ${{ steps.package-linux.outputs.file-path }}
+          NATIVE_NAME: ${{ steps.native.outputs.file-name }}
+          NATIVE_PATH: ${{ steps.native.outputs.file-path }}
+          LINUX_NAME: ${{ steps.linux.outputs.file-name }}
+          LINUX_PATH: ${{ steps.linux.outputs.file-path }}
+          TARGET: ${{ matrix.target }}
         run: |
           name="${NATIVE_NAME:-$LINUX_NAME}"
           path="${NATIVE_PATH:-$LINUX_PATH}"
-          test -n "$name"
-          test -f "$path"
-          echo "file-name=$name" >> "$GITHUB_OUTPUT"
-          echo "file-path=$path" >> "$GITHUB_OUTPUT"
-
-      - name: Smoke test packaged NIF
-        if: ${{ !contains(matrix.job.target, 'musl') }}
-        shell: bash
-        env:
-          ARTIFACT_PATH: ${{ steps.artifact.outputs.file-path }}
-          TARGET: ${{ matrix.job.target }}
-        run: |
-          rm -rf nif-smoke
-          mkdir nif-smoke
-          tar -xzf "$ARTIFACT_PATH" -C nif-smoke
-          nif_path=$(find nif-smoke -type f | head -n1)
-          test -n "$nif_path"
+          test -n "$name" && test -f "$path"
+          mkdir raw-smoke
+          tar -xzf "$path" -C raw-smoke
+          test "$(find raw-smoke -type f | wc -l | tr -d ' ')" = 1
+          nif_path=$(find "$PWD/raw-smoke" -type f -print -quit)
           if [[ "$TARGET" == *-pc-windows-* ]]; then
             nif_path=$(cygpath -w "$nif_path")
           fi
-          NIF_PATH="$nif_path" elixir scripts/smoke_precompiled_nif.exs
+          {
+            echo "file-name=$name"
+            echo "file-path=$path"
+            echo "nif-path=$nif_path"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Record artifact checksum
+      - name: Raw smoke native/glibc artifact
+        if: ${{ !contains(matrix.target, 'musl') }}
         shell: bash
         env:
-          ARTIFACT_PATH: ${{ steps.artifact.outputs.file-path }}
-        run: |
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "$ARTIFACT_PATH"
-          else
-            shasum -a 256 "$ARTIFACT_PATH"
-          fi
+          NIF_PATH: ${{ steps.artifact.outputs.nif-path }}
+        run: elixir scripts/smoke_precompiled_nif.exs
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
+      - name: Raw smoke musl artifact in matching Alpine Elixir
+        if: contains(matrix.target, 'musl')
+        shell: bash
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/work:ro" \
+            -e NIF_PATH="/work/$(find raw-smoke -type f -print -quit)" \
+            hexpm/elixir:1.15.7-erlang-26.2.3-alpine-3.19.1 \
+            sh -c 'apk add --no-cache libstdc++ >/dev/null && elixir /work/scripts/smoke_precompiled_nif.exs'
+
+      - name: Upload validated artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.artifact.outputs.file-name }}
           path: ${{ steps.artifact.outputs.file-path }}
+          if-no-files-found: error
 
-      - name: Publish release artifact
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  aggregate:
+    name: Validate and optionally publish
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Resolve project version
+        shell: bash
+        run: echo "PROJECT_VERSION=$(scripts/project_version.sh)" >> "$GITHUB_ENV"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          files: ${{ steps.artifact.outputs.file-path }}
+          path: release-assets
+          merge-multiple: true
+
+      - name: Validate exact release asset set
+        shell: bash
+        run: |
+          cat > expected <<EOF
+          librocker-v${PROJECT_VERSION}-nif-${NIF_VERSION}-aarch64-apple-darwin.so.tar.gz
+          librocker-v${PROJECT_VERSION}-nif-${NIF_VERSION}-aarch64-unknown-linux-gnu.so.tar.gz
+          librocker-v${PROJECT_VERSION}-nif-${NIF_VERSION}-aarch64-unknown-linux-musl.so.tar.gz
+          librocker-v${PROJECT_VERSION}-nif-${NIF_VERSION}-x86_64-apple-darwin.so.tar.gz
+          librocker-v${PROJECT_VERSION}-nif-${NIF_VERSION}-x86_64-unknown-linux-gnu.so.tar.gz
+          librocker-v${PROJECT_VERSION}-nif-${NIF_VERSION}-x86_64-unknown-linux-musl.so.tar.gz
+          rocker-v${PROJECT_VERSION}-nif-${NIF_VERSION}-x86_64-pc-windows-msvc.dll.tar.gz
+          EOF
+          find release-assets -maxdepth 1 -type f -printf '%f\n' | sort > actual
+          diff -u expected actual
+          test "$(wc -l < actual)" -eq 7
+          while IFS= read -r asset; do
+            test "$(tar -tzf "release-assets/$asset" | wc -l)" -eq 1
+            entry=$(tar -tzf "release-assets/$asset")
+            test "$entry.tar.gz" = "$asset"
+          done < expected
+
+      - name: Create draft, validate, then publish
+        if: inputs.publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v$PROJECT_VERSION"
+          release_id=""
+          published=false
+          cleanup_partial_release() {
+            status=$?
+            if test "$status" -ne 0 && test -n "$release_id"; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id" || true
+              if test "$published" = true; then
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" || true
+              fi
+            fi
+            exit "$status"
+          }
+          trap cleanup_partial_release EXIT
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "error: release $tag already exists" >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "error: Git tag $tag already exists without a release" >&2
+            exit 1
+          fi
+
+          cat > release-notes.md <<EOF
+          ExRocket ${PROJECT_VERSION} precompiled NIF release.
+
+          Every attached NIF ${NIF_VERSION} archive was built from this release commit and
+          directly smoke-tested before publication.
+          EOF
+          gh release create "$tag" release-assets/*.tar.gz \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft \
+            --title "$tag" --notes-file release-notes.md
+
+          for attempt in $(seq 1 30); do
+            release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq \
+              ".[] | select(.draft == true and .tag_name == \"$tag\") | .id")
+            test -n "$release_id" && break
+            test "$attempt" -lt 30 || exit 1
+            sleep 1
+          done
+
+          while IFS= read -r asset; do
+            printf '%s sha256:%s\n' "$asset" "$(sha256sum "release-assets/$asset" | cut -d' ' -f1)"
+          done < expected | sort > expected-assets
+
+          for attempt in $(seq 1 30); do
+            gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+              --jq '.assets[] | [.name, .digest] | @tsv' \
+              | tr '\t' ' ' | sort > published-assets
+            diff -q expected-assets published-assets >/dev/null && break
+            test "$attempt" -lt 30 || { diff -u expected-assets published-assets; exit 1; }
+            sleep 2
+          done
+
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false >/dev/null
+          published=true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"
+
+          release_id=""
+          published=false
+          trap - EXIT

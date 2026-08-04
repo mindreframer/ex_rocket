@@ -42,7 +42,25 @@ built and functionally smoked every target before the 0.5.0 tag:
 | `x86_64-unknown-linux-musl` | passed | passed | `c2f7e587e44468fc19e03dcd1f8ce54ca3b0ad16072d49728669879b0a088a1e` |
 | `x86_64-pc-windows-msvc` | passed | passed | `111b79aa6644d0b0b7788cb6e6fee356280fa0e7b1f19dba3dc9636bd3a0d583` |
 
-The final published checksums are regenerated from the tag workflow artifacts,
-because archive metadata can differ between builds. Release completion still
-requires a green tag workflow, all seven GitHub release assets, and a successful
-local precompiled download.
+## Published Release Verification
+
+Tag workflow
+[`30876159417`](https://github.com/mindreframer/ex_rocket/actions/runs/30876159417)
+passed all seven builds and functional smoke tests. GitHub release
+[`v0.5.0`](https://github.com/mindreframer/ex_rocket/releases/tag/v0.5.0)
+contains exactly seven archives:
+
+| Target | Published SHA-256 |
+| --- | --- |
+| `aarch64-apple-darwin` | `dae4267c0bef173f5cb29234911b9853faa3e939664b50539c42c5afc00f27fe` |
+| `x86_64-apple-darwin` | `4c0748d32db2638f58dd27fffd4a17e141690c2232d3d3c11db179efb9c50fd1` |
+| `aarch64-unknown-linux-gnu` | `9d28fb7d77969b4cb0845667cce42e7d0955d98d4245b276a8aedaa2b15364c1` |
+| `aarch64-unknown-linux-musl` | `5d57da3674088ee5db16d66744882a857e7a3cee1af4925e92fc515ec2da7879` |
+| `x86_64-unknown-linux-gnu` | `ffc8e8c5bc9c60c3c929038cc4ef650d03c75ad1ea2a33282218ce68bf2dfd18` |
+| `x86_64-unknown-linux-musl` | `46233644fbdf5214cb7927f6063e4cbf60be1452c8d654abd9ea912582a7ac94` |
+| `x86_64-pc-windows-msvc` | `c1b742050ed14ea8810dff0a0e7cd5933c990558be24e0a769b339aec8e708dc` |
+
+`mix rustler_precompiled.download ExRocket --all` downloaded and verified all
+published archives locally. The generated manifest is committed as
+`checksum-Elixir.ExRocket.exs`; the archives and `SHA256SUMS` remain locally in
+`release-artifacts/v0.5.0/published/`.

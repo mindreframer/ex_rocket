@@ -26,6 +26,8 @@ ex_rock-*.tar
 /tmp/
 /priv/native/
 /release-artifacts/
+/.ci/
+/.no-rust/
 
 core
 
