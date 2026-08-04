@@ -53,6 +53,22 @@ Write several changes atomically:
   ExRocket.multi_get(db, ["user:1", "user:2", "missing"])
 ```
 
+Atomic visibility is not the same as machine-crash durability. The default
+batch path keeps the WAL enabled but does not request a synchronous filesystem
+flush. ExRocket 0.5.0 adds `write_batch/3` for explicit durability boundaries:
+
+```elixir
+{:ok, 1} =
+  ExRocket.write_batch(
+    db,
+    [{:put, "materialization/checkpoint", "clean:42"}],
+    %{sync: true}
+  )
+```
+
+Do not combine `sync: true` with `disable_wal: true`; a synchronous WAL guarantee
+cannot be provided while the WAL is disabled.
+
 Use a column family to keep related data separate:
 
 ```elixir
@@ -106,7 +122,7 @@ ExRocket's hot-key microbenchmark on an Apple M3 Ultra measured approximately 2.
 
 ## Validation
 
-Run `scripts/roadmap001_check.sh` to format, source-build, and test ExRocket.
+Run `scripts/roadmap002_check.sh` to clean, format, source-build, and test ExRocket.
 
 ## Release
 

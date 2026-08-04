@@ -215,6 +215,13 @@ ops = [
 ]
 {:ok, 7} = ExRocket.write_batch(db, ops)  # Returns {:ok, count} on success
 
+# Atomic and synchronously durable before success is returned
+{:ok, 1} = ExRocket.write_batch(
+  db,
+  [{:put, "materialization/checkpoint", "clean:42"}],
+  %{sync: true}
+)
+
 # Example: Counter batch operations
 {:ok, db} = ExRocket.open("my_db", %{
   create_if_missing: true,
@@ -231,6 +238,10 @@ ops = [
 
 {:ok, "140"} = ExRocket.get(db, "total")
 {:ok, "updated"} = ExRocket.get(db, "status")
+
+# Atomicity controls all-or-nothing visibility. Durability controls whether an
+# acknowledged write survives machine failure. Default batches keep the WAL
+# enabled but do not request a synchronous filesystem flush.
 
 # Example: ETF merge in batch (requires erlang_merge_operator)
 {:ok, db} = ExRocket.open("my_db", %{
@@ -258,7 +269,7 @@ operand2 = :erlang.term_to_binary({:list_append, [:x, :y]})
 # Iterate through keys
 {:ok, "key1", "value1"} = ExRocket.next(iter)
 {:ok, "key2", "value2"} = ExRocket.next(iter)
-:end_of_table = ExRocket.next(iter)
+:end_of_iterator = ExRocket.next(iter)
 ```
 
 ### Range Iterators
@@ -394,10 +405,10 @@ true = ExRocket.key_may_exist_cf(db, "my_cf", "key")
 options = %{
   create_if_missing: true,
   merge_operator: "erlang_merge_operator",
-  max_open_files: 1000,
-  write_buffer_size: 64 * 1024 * 1024,  # 64MB
-  target_file_size_base: 64 * 1024 * 1024,
-  max_bytes_for_level_base: 256 * 1024 * 1024
+  set_max_open_files: 1000,
+  set_write_buffer_size: 64 * 1024 * 1024,  # 64MB
+  set_target_file_size_base: 64 * 1024 * 1024,
+  set_max_bytes_for_level_base: 256 * 1024 * 1024
 }
 
 {:ok, db} = ExRocket.open("path/to/db", options)

@@ -6,6 +6,36 @@ defmodule ExRocket do
 
   alias :erlang, as: Erlang
 
+  @opaque db :: reference()
+  @opaque iterator :: reference()
+  @opaque snapshot :: reference() | {:snap, db(), reference()}
+
+  @type batch_operation ::
+          {:put, binary(), binary()}
+          | {:delete, binary()}
+          | {:merge, binary(), binary()}
+          | {:put_cf, String.t(), binary(), binary()}
+          | {:delete_cf, String.t(), binary()}
+          | {:merge_cf, String.t(), binary(), binary()}
+
+  @type write_options :: %{
+          optional(:sync) => boolean(),
+          optional(:disable_wal) => boolean()
+        }
+
+  @type iterator_take_options :: %{
+          required(:max_entries) => pos_integer(),
+          optional(:max_bytes) => pos_integer()
+        }
+
+  @type iterator_status :: :more | :end_of_iterator
+  @type consistency_error ::
+          :closed
+          | :resource_busy
+          | :invalid_write_options
+          | :invalid_iterator_options
+          | {:unknown_option, atom()}
+
   @version Mix.Project.config()[:version]
 
   use RustlerPrecompiled,
@@ -62,7 +92,17 @@ defmodule ExRocket do
   def merge_cfb(db_ref, cf_name, key, operand),
     do: merge_cf(db_ref, cf_name, key, :erlang.term_to_binary(operand))
 
+  @spec write_batch(db(), [batch_operation()]) ::
+          {:ok, non_neg_integer()} | {:error, term()}
   def write_batch(_db_ref, _operations), do: Erlang.nif_error(:nif_not_loaded)
+
+  @spec write_batch(db(), [batch_operation()], write_options()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def write_batch(_db_ref, _operations, _write_options), do: Erlang.nif_error(:nif_not_loaded)
+
+  @spec flush_wal(db(), boolean()) :: :ok | {:error, term()}
+  def flush_wal(_db_ref, _sync), do: Erlang.nif_error(:nif_not_loaded)
+
   def delete_range(_db_ref, _from, _to), do: Erlang.nif_error(:nif_not_loaded)
   def multi_get(_db_ref, _keys), do: Erlang.nif_error(:nif_not_loaded)
   def key_may_exist(_db_ref, _key), do: Erlang.nif_error(:nif_not_loaded)
@@ -73,6 +113,13 @@ defmodule ExRocket do
 
   def prefix_iterator(_db_ref, _prefix), do: Erlang.nif_error(:nif_not_loaded)
   def next(_iterator_ref), do: Erlang.nif_error(:nif_not_loaded)
+
+  @spec iterator_take(iterator(), iterator_take_options()) ::
+          {:ok, [{binary(), binary()}], iterator_status()} | {:error, term()}
+  def iterator_take(_iterator_ref, _options), do: Erlang.nif_error(:nif_not_loaded)
+
+  @spec close(db()) :: :ok | {:error, :resource_busy | term()}
+  def close(_db_ref), do: Erlang.nif_error(:nif_not_loaded)
 
   def create_cf(_db_ref, _cf_name, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)
   def open_cf(_path, _cf_names, _options \\ %{}), do: Erlang.nif_error(:nif_not_loaded)

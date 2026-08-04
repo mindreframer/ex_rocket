@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 1.1: Capture the API and native implementation inventory.
-- [ ] Phase 1.2: Add focused behavioral baseline tests.
-- [ ] Phase 1.3: Add public types, specs, stubs, and exact result shapes.
-- [ ] Phase 1.4: Define the stable error vocabulary.
-- [ ] Phase 1.5: Correct terminal, option, and durability documentation.
-- [ ] Phase 1.6: Add `scripts/roadmap002_check.sh`.
-- [ ] Phase 1.7: Run gates and commit.
+- [x] Phase 1.1: Capture the API and native implementation inventory.
+- [x] Phase 1.2: Add focused behavioral baseline tests.
+- [x] Phase 1.3: Add public types, specs, stubs, and exact result shapes.
+- [x] Phase 1.4: Define the stable error vocabulary.
+- [x] Phase 1.5: Correct terminal, option, and durability documentation.
+- [x] Phase 1.6: Add `scripts/roadmap002_check.sh`.
+- [x] Phase 1.7: Run gates and commit.
 
 ## Implementation Steps
 
@@ -22,9 +22,9 @@
 
 ## Quality Gate
 
-- [ ] API/native inventory is complete.
-- [ ] Baseline and contract tests pass.
-- [ ] Documentation corrections are complete.
-- [ ] Clean source-build script passes.
-- [ ] Full suite passes.
-- [ ] Only EPIC001 changes are committed.
+- [x] API/native inventory is complete.
+- [x] Baseline and contract tests pass.
+- [x] Documentation corrections are complete.
+- [x] Clean source-build script passes.
+- [x] Full suite passes.
+- [x] Only EPIC001 changes are committed.
