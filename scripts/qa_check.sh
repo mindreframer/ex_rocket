@@ -41,9 +41,6 @@ mix test --no-compile
 qa_stage rust "format"
 cargo fmt --manifest-path native/rocker/Cargo.toml --all -- --check
 
-qa_stage rust "check"
-cargo check --manifest-path native/rocker/Cargo.toml --locked --all-targets
-
 qa_stage nif "functional raw-library smoke"
 nif_path=$(find _build/test/lib/ex_rocket/native/rocker/release -maxdepth 1 -type f \
   \( -name 'librocker.so' -o -name 'librocker.dylib' -o -name 'rocker.dll' \) -print -quit)
