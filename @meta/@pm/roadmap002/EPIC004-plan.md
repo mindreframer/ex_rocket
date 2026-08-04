@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 4.1: Classify every exported NIF by blocking behavior.
-- [ ] Phase 4.2: Move point operations to `DirtyIo`.
-- [ ] Phase 4.3: Move storage-backed bulk operations to `DirtyIo`.
-- [ ] Phase 4.4: Move iterator and snapshot operations to `DirtyIo`.
-- [ ] Phase 4.5: Audit lifecycle and metadata scheduling.
-- [ ] Phase 4.6: Add scheduler-responsiveness benchmarks.
-- [ ] Phase 4.7: Run gates and commit.
+- [x] Phase 4.1: Classify every exported NIF by blocking behavior.
+- [x] Phase 4.2: Move point operations to `DirtyIo`.
+- [x] Phase 4.3: Move storage-backed bulk operations to `DirtyIo`.
+- [x] Phase 4.4: Move iterator and snapshot operations to `DirtyIo`.
+- [x] Phase 4.5: Audit lifecycle and metadata scheduling.
+- [x] Phase 4.6: Add scheduler-responsiveness benchmarks.
+- [x] Phase 4.7: Run gates and commit.
 
 ## Implementation Steps
 
@@ -22,9 +22,9 @@
 
 ## Quality Gate
 
-- [ ] Every NIF is classified.
-- [ ] No unjustified blocking NIF remains normal-scheduled.
-- [ ] Scheduling inventory tests pass.
-- [ ] Responsiveness/benchmark smoke passes.
-- [ ] Full source gate passes.
-- [ ] Only EPIC004 changes are committed.
+- [x] Every NIF is classified.
+- [x] No unjustified blocking NIF remains normal-scheduled.
+- [x] Scheduling inventory tests pass.
+- [x] Responsiveness/benchmark smoke passes.
+- [x] Full source gate passes.
+- [x] Only EPIC004 changes are committed.

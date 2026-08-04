@@ -136,7 +136,16 @@ Other targets can build from source with `FORCE_BUILD=1` and the build requireme
 
 ## Performance
 
-ExRocket's hot-key microbenchmark on an Apple M3 Ultra measured approximately 2.46 million reads/second and 470,000 writes/second. Real workloads will vary with key/value size, cache hit rate, durability settings, compaction, and storage hardware.
+Storage-backed NIFs run on Rustler dirty I/O schedulers so cache misses, WAL
+flushes, iterator walks, and native lock waits do not block normal BEAM
+schedulers. Dirty dispatch adds overhead to very small hot-cache calls; use
+`iterator_take/2` to amortize NIF transitions during scans.
+
+ExRocket's historical normal-scheduler hot-key microbenchmark measured
+approximately 2.46 million reads/second and 470,000 writes/second on an Apple M3
+Ultra. ADR002 benchmark reports include both storage throughput and independent
+BEAM heartbeat latency. Real workloads vary with key/value size, cache state,
+durability settings, compaction, concurrency, and storage hardware.
 
 ## Source build requirements
 

@@ -81,7 +81,7 @@ pub fn lxcode(env: Env) -> NifResult<Term> {
     Ok((ok(), vsn1()).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn latest_sequence_number(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
     Ok((ok(), resource.read().latest_sequence_number()).encode(env))
 }
@@ -118,12 +118,12 @@ pub fn repair(env: Env, path: String, options: RockerOptions) -> NifResult<Term>
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn get_db_path(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
     Ok((ok(), resource.read().path().display().to_string()).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn put<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -136,7 +136,7 @@ pub fn put<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn get<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -153,7 +153,7 @@ pub fn get<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn delete<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -165,7 +165,7 @@ pub fn delete<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn merge<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -178,7 +178,7 @@ pub fn merge<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn merge_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -307,7 +307,7 @@ pub fn delete_range<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn multi_get<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -334,7 +334,7 @@ pub fn multi_get<'a>(
     Ok((ok(), output).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn key_may_exist<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -401,7 +401,7 @@ pub fn list_cf(env: Env, path: String, options: RockerOptions) -> NifResult<Term
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn drop_cf(env: Env, resource: ResourceArc<DbResource>, name: String) -> NifResult<Term> {
     match resource.write().drop_cf(&name) {
         Ok(()) => Ok(ok().encode(env)),
@@ -409,7 +409,7 @@ pub fn drop_cf(env: Env, resource: ResourceArc<DbResource>, name: String) -> Nif
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn put_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -427,7 +427,7 @@ pub fn put_cf<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn get_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -449,7 +449,7 @@ pub fn get_cf<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn delete_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -484,7 +484,7 @@ pub fn delete_range_cf<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn multi_get_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -528,7 +528,7 @@ pub fn multi_get_cf<'a>(
     Ok((ok(), output).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn key_may_exist_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -582,7 +582,7 @@ fn make_iterator_resource(
     })
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn iterator<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -599,7 +599,7 @@ pub fn iterator<'a>(
     Ok((ok(), iterator).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn iterator_range<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -635,7 +635,7 @@ pub fn iterator_range<'a>(
     Ok((ok(), iterator).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn prefix_iterator<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -647,7 +647,7 @@ pub fn prefix_iterator<'a>(
     Ok((ok(), iterator).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn iterator_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -668,7 +668,7 @@ pub fn iterator_cf<'a>(
     Ok((ok(), iterator).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn prefix_iterator_cf<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
@@ -692,7 +692,7 @@ fn decode_snapshot(resource: Term<'_>) -> NifResult<ResourceArc<SnapshotResource
     terms[2].decode()
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
     let guard = resource.read();
     let snapshot = guard.snapshot();
@@ -705,7 +705,7 @@ pub fn snapshot(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> 
     Ok((ok(), (snap(), resource, snapshot_resource)).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot_get<'a>(env: Env<'a>, resource: Term<'a>, key: Binary<'a>) -> NifResult<Term<'a>> {
     match decode_snapshot(resource)?.lock().get(key.as_slice()) {
         Ok(Some(value)) => {
@@ -718,7 +718,7 @@ pub fn snapshot_get<'a>(env: Env<'a>, resource: Term<'a>, key: Binary<'a>) -> Ni
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot_get_cf<'a>(
     env: Env<'a>,
     resource: Term<'a>,
@@ -741,7 +741,7 @@ pub fn snapshot_get_cf<'a>(
     }
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot_multi_get<'a>(
     env: Env<'a>,
     resource: Term<'a>,
@@ -768,7 +768,7 @@ pub fn snapshot_multi_get<'a>(
     Ok((ok(), output).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot_multi_get_cf<'a>(
     env: Env<'a>,
     resource: Term<'a>,
@@ -828,7 +828,7 @@ fn make_snapshot_iterator_resource(
     })
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot_iterator<'a>(
     env: Env<'a>,
     resource: Term<'a>,
@@ -846,7 +846,7 @@ pub fn snapshot_iterator<'a>(
     Ok((ok(), iterator).encode(env))
 }
 
-#[rustler::nif]
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot_iterator_cf<'a>(
     env: Env<'a>,
     resource: Term<'a>,

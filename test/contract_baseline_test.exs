@@ -77,49 +77,49 @@ defmodule ExRocket.ContractBaselineTest do
     "create_backup" => "DirtyIo",
     "create_cf" => "DirtyIo",
     "create_checkpoint" => "DirtyIo",
-    "delete" => "Normal",
-    "delete_cf" => "Normal",
+    "delete" => "DirtyIo",
+    "delete_cf" => "DirtyIo",
     "delete_range" => "DirtyIo",
     "delete_range_cf" => "DirtyIo",
     "destroy" => "DirtyIo",
-    "drop_cf" => "Normal",
-    "get" => "Normal",
-    "get_backup_info" => "DirtyIo",
-    "get_cf" => "Normal",
-    "get_db_path" => "Normal",
+    "drop_cf" => "DirtyIo",
     "flush_wal" => "DirtyIo",
-    "iterator" => "Normal",
-    "iterator_cf" => "Normal",
-    "iterator_range" => "Normal",
+    "get" => "DirtyIo",
+    "get_backup_info" => "DirtyIo",
+    "get_cf" => "DirtyIo",
+    "get_db_path" => "DirtyIo",
+    "iterator" => "DirtyIo",
+    "iterator_cf" => "DirtyIo",
+    "iterator_range" => "DirtyIo",
     "iterator_take" => "DirtyIo",
-    "key_may_exist" => "Normal",
-    "key_may_exist_cf" => "Normal",
-    "latest_sequence_number" => "Normal",
+    "key_may_exist" => "DirtyIo",
+    "key_may_exist_cf" => "DirtyIo",
+    "latest_sequence_number" => "DirtyIo",
     "list_cf" => "DirtyIo",
     "lxcode" => "Normal",
-    "merge" => "Normal",
-    "merge_cf" => "Normal",
-    "multi_get" => "Normal",
-    "multi_get_cf" => "Normal",
+    "merge" => "DirtyIo",
+    "merge_cf" => "DirtyIo",
+    "multi_get" => "DirtyIo",
+    "multi_get_cf" => "DirtyIo",
     "next" => "DirtyIo",
     "open" => "DirtyIo",
     "open_cf" => "DirtyIo",
     "open_cf_for_read_only" => "DirtyIo",
     "open_for_read_only" => "DirtyIo",
-    "prefix_iterator" => "Normal",
-    "prefix_iterator_cf" => "Normal",
+    "prefix_iterator" => "DirtyIo",
+    "prefix_iterator_cf" => "DirtyIo",
     "purge_old_backups" => "DirtyIo",
-    "put" => "Normal",
-    "put_cf" => "Normal",
+    "put" => "DirtyIo",
+    "put_cf" => "DirtyIo",
     "repair" => "DirtyIo",
     "restore_from_backup" => "DirtyIo",
-    "snapshot" => "Normal",
-    "snapshot_get" => "Normal",
-    "snapshot_get_cf" => "Normal",
-    "snapshot_iterator" => "Normal",
-    "snapshot_iterator_cf" => "Normal",
-    "snapshot_multi_get" => "Normal",
-    "snapshot_multi_get_cf" => "Normal",
+    "snapshot" => "DirtyIo",
+    "snapshot_get" => "DirtyIo",
+    "snapshot_get_cf" => "DirtyIo",
+    "snapshot_iterator" => "DirtyIo",
+    "snapshot_iterator_cf" => "DirtyIo",
+    "snapshot_multi_get" => "DirtyIo",
+    "snapshot_multi_get_cf" => "DirtyIo",
     "write_batch" => "DirtyIo"
   }
 
@@ -143,10 +143,14 @@ defmodule ExRocket.ContractBaselineTest do
     assert actual == @nif_schedulers
 
     inventory = File.read!(Path.join(@project_root, "@meta/@wiki/ROADMAP002-BASELINE.md"))
+    audit = File.read!(Path.join(@project_root, "@meta/@wiki/ROADMAP002-SCHEDULER-AUDIT.md"))
 
     Enum.each(Map.keys(actual), fn name ->
       assert inventory =~ "`#{name}`"
+      assert audit =~ "`#{name}`"
     end)
+
+    assert for({name, "Normal"} <- actual, do: name) == ["lxcode"]
   end
 
   test "option decoders and their baseline behavior are inventoried" do
