@@ -52,14 +52,20 @@ jobs:
       - name: Quality gate
         run: scripts/qa_check.sh
 
-  checksum-manifest:
-    name: Detect precompiled checksum
+  package:
+    name: Build consumer package once
     runs-on: ubuntu-24.04
-    timeout-minutes: 2
+    timeout-minutes: 5
     outputs:
       present: ${{ steps.checksum.outputs.present }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          elixir-version: "1.15.7"
+          otp-version: "26.2.3"
+
       - name: Detect published checksum manifest
         id: checksum
         shell: bash
@@ -74,10 +80,25 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Build unpacked Hex package
+        if: steps.checksum.outputs.present == 'true'
+        run: |
+          mix local.hex 2.5.1 --force
+          mix hex.build --unpack --output .ci/precompiled-package
+          test -f .ci/precompiled-package/checksum-Elixir.ExRocket.exs
+
+      - name: Upload unpacked Hex package
+        if: steps.checksum.outputs.present == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unpacked-hex-package
+          path: .ci/precompiled-package
+          if-no-files-found: error
+
   precompiled-consumer:
     name: Precompiled consumer / ${{ matrix.target }}
-    needs: checksum-manifest
-    if: needs.checksum-manifest.outputs.present == 'true'
+    needs: package
+    if: needs.package.outputs.present == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -108,9 +129,16 @@ jobs:
             ~/AppData/Local/rustler_precompiled
           key: precompiled-consumer-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('mix.lock', 'checksum-*.exs', 'lib/**/*.ex', 'mix.exs', 'scripts/smoke_precompiled_consumer.exs') }}
 
+      - name: Download unpacked Hex package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: unpacked-hex-package
+          path: .ci/precompiled-package
+
       - name: Compile unpacked package without Rust and smoke public API
         shell: bash
         run: |
+          test -f .ci/precompiled-package/checksum-Elixir.ExRocket.exs
           no_rust="$PWD/.no-rust"
           mkdir -p "$no_rust"
           for command in cargo rustc; do
@@ -125,10 +153,7 @@ jobs:
           unset FORCE_BUILD RUSTLER_PRECOMPILED_FORCE_BUILD_ALL
           mix local.hex 2.5.1 --force
 
-          rm -rf .ci/precompiled-package
           mkdir -p .ci/consumer
-          mix hex.build --unpack --output .ci/precompiled-package
-          test -f .ci/precompiled-package/checksum-Elixir.ExRocket.exs
           cat > .ci/consumer/mix.exs <<'EOF'
           defmodule ExRocketConsumer.MixProject do
             use Mix.Project
@@ -139,6 +164,6 @@ jobs:
           EOF
 
           cd .ci/consumer
-          MIX_ENV=prod mix deps.get --only prod
-          MIX_ENV=prod mix compile --warnings-as-errors
-          MIX_ENV=prod mix run --no-start ../../scripts/smoke_precompiled_consumer.exs
+          env MIX_ENV=prod mix deps.get --only prod
+          env MIX_ENV=prod mix compile --warnings-as-errors
+          env MIX_ENV=prod mix run --no-start ../../scripts/smoke_precompiled_consumer.exs
