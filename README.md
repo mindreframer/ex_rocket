@@ -183,7 +183,8 @@ complete diagnostic output.
 
 CI uses source-aware Mix/Cargo caches with lockfile restore keys, per-target
 release caches, and no-Rust consumer jobs that compile the unpacked Hex package
-and load each published native artifact through the public API.
+and load each published native artifact through the public API. For
+metadata-only changes, include `[skip-ci]` in the commit title to skip push CI.
 
 ## Release
 
