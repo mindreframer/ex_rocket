@@ -66,11 +66,11 @@ defmodule ExRocket.Init.Test do
       spawn(fn ->
         {:ok, db} = ExRocket.open(path)
         true = is_reference(db)
+        :ok = ExRocket.close(db)
         send(test, :ok)
       end)
 
       assert_receive(:ok, 1000)
-      Process.sleep(100)
       assert :ok == ExRocket.destroy(path)
     end
 
@@ -80,6 +80,7 @@ defmodule ExRocket.Init.Test do
       spawn(fn ->
         {:ok, db} = ExRocket.open(context.db_path)
         true = is_reference(db)
+        :ok = ExRocket.close(db)
         send(test, :ok)
       end)
 
