@@ -132,9 +132,9 @@ defmodule ExRocket.OptionsTest do
 
   test "public examples contain no stale option aliases or iterator terminal", _context do
     docs =
-      ["README.md", "CHEATSHEET.md"]
-      |> Enum.map(&File.read!(Path.join(@root, &1)))
-      |> Enum.join("\n")
+      Enum.map_join(["README.md", "CHEATSHEET.md"], "\n", fn path ->
+        File.read!(Path.join(@root, path))
+      end)
 
     refute docs =~ ~r/(?<!set_)max_open_files:/
     refute docs =~ ~r/(?<!set_)write_buffer_size:/
