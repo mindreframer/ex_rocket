@@ -31,3 +31,6 @@ core
 checksum*
 # Rust build artifacts (including native crates built directly).
 **/target/
+
+## search indexes
+.ngi
