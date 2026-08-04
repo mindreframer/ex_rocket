@@ -17,7 +17,17 @@ A comprehensive reference for all ExRocket features and functions.
 
 # Open column families read-only
 {:ok, db} = ExRocket.open_cf_for_read_only("path/to/db", ["cf1"])
+
+# Explicit close is deterministic and idempotent
+:ok = ExRocket.close(db)
+:ok = ExRocket.close(db)
+{:error, :closed} = ExRocket.get(db, "key")
 ```
+
+`close/1` returns `{:error, :resource_busy}` while a live iterator or snapshot
+retains the database. Release those child resources before retrying. Successful
+close releases the RocksDB path lock before returning; garbage-collection close
+remains available when explicit close is omitted.
 
 ### Database Management
 ```elixir

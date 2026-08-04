@@ -78,6 +78,7 @@ defmodule ExRocket do
     case get(db_ref, key) do
       :undefined -> :undefined
       {:ok, value} -> {:ok, :erlang.binary_to_term(value)}
+      result -> result
     end
   end
 
@@ -143,6 +144,7 @@ defmodule ExRocket do
     case get_cf(db_ref, cf_name, key) do
       :undefined -> :undefined
       {:ok, value} -> {:ok, :erlang.binary_to_term(value)}
+      result -> result
     end
   end
 

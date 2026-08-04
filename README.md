@@ -101,6 +101,19 @@ row alone exceeds the byte limit, it is returned to guarantee progress. A
 bound-first page returns `:more`; only observed exhaustion returns
 `:end_of_iterator`.
 
+Release the database path deterministically when ownership ends:
+
+```elixir
+:ok = ExRocket.close(db)
+:ok = ExRocket.close(db) # idempotent
+{:error, :closed} = ExRocket.get(db, "key")
+```
+
+A live iterator or snapshot keeps its native owner safe, so close returns
+`{:error, :resource_busy}` until that child resource is released. Successful
+close drops RocksDB and releases its filesystem lock before returning; normal
+resource garbage collection remains a fallback.
+
 See the [full cheatsheet](https://github.com/mindreframer/ex_rocket/blob/main/CHEATSHEET.md) for iterators, merge operators, snapshots, checkpoints, backups, options, and error-handling patterns.
 
 ## Technology

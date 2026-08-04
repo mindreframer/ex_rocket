@@ -90,7 +90,9 @@ The mechanically checked NIF list is updated as epics add exports. EPIC002 adds
 `flush_wal` on `DirtyIo` and changes the native `write_batch` export from arity
 2 to arity 3 while the Elixir `write_batch/2` compatibility wrapper remains.
 EPIC003 adds bounded `iterator_take` and moves `next` to `DirtyIo`; EPIC004
-completes the scheduler audit for all remaining exports.
+completes the scheduler audit for all remaining exports. EPIC005 adds `close`
+on `DirtyIo` and changes database state to `RwLock<Option<DB>>` with dependent
+leases.
 
 ## Protected Compatibility Semantics
 

@@ -1,6 +1,6 @@
 use crate::atoms::{
-    backup, end_of_iterator, error, invalid_iterator_options, invalid_write_options, more, ok,
-    snap, undefined, unknown_cf, unknown_option, vsn1,
+    backup, closed, end_of_iterator, error, invalid_iterator_options, invalid_write_options, more,
+    ok, resource_busy, snap, undefined, unknown_cf, unknown_option, vsn1,
 };
 use crate::iterator_options::{IteratorOptionsError, IteratorTakeOptions};
 use crate::options::RockerOptions;
@@ -14,60 +14,157 @@ use rocksdb::{
 use rustler::types::atom::Atom;
 use rustler::types::list::ListIterator;
 use rustler::{Binary, Encoder, Env, NifResult, OwnedBinary, Resource, ResourceArc, Term};
+use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub struct DbResource {
-    db: RwLock<DB>,
+    db: RwLock<Option<DB>>,
+    leases: AtomicUsize,
 }
 
 impl Resource for DbResource {}
 
+pub struct DbLease {
+    owner: ResourceArc<DbResource>,
+}
+
+impl DbLease {
+    fn acquire(owner: ResourceArc<DbResource>) -> Self {
+        owner.leases.fetch_add(1, Ordering::SeqCst);
+        Self { owner }
+    }
+}
+
+impl Drop for DbLease {
+    fn drop(&mut self) {
+        let previous = self.owner.leases.fetch_sub(1, Ordering::SeqCst);
+        debug_assert!(previous > 0, "database lease count underflow");
+    }
+}
+
+pub struct DbReadGuard<'a> {
+    guard: RwLockReadGuard<'a, Option<DB>>,
+}
+
+impl Deref for DbReadGuard<'_> {
+    type Target = DB;
+
+    fn deref(&self) -> &Self::Target {
+        match self.guard.as_ref() {
+            Some(db) => db,
+            None => unreachable!("checked open database state"),
+        }
+    }
+}
+
+pub struct DbWriteGuard<'a> {
+    guard: RwLockWriteGuard<'a, Option<DB>>,
+}
+
+impl Deref for DbWriteGuard<'_> {
+    type Target = DB;
+
+    fn deref(&self) -> &Self::Target {
+        match self.guard.as_ref() {
+            Some(db) => db,
+            None => unreachable!("checked open database state"),
+        }
+    }
+}
+
+impl DerefMut for DbWriteGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self.guard.as_mut() {
+            Some(db) => db,
+            None => unreachable!("checked open database state"),
+        }
+    }
+}
+
 pub struct SnapshotResource {
     snapshot: Mutex<Snapshot<'static>>,
     owner: ResourceArc<DbResource>,
+    _lease: DbLease,
 }
 
 impl Resource for SnapshotResource {}
 
 impl SnapshotResource {
     fn lock(&self) -> MutexGuard<'_, Snapshot<'static>> {
-        self.snapshot.lock().unwrap()
+        self.snapshot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
+type IteratorEntry = (Box<[u8]>, Box<[u8]>);
+
 pub struct IteratorState {
     iter: DBIterator<'static>,
-    pending: Option<(Box<[u8]>, Box<[u8]>)>,
+    pending: Option<IteratorEntry>,
 }
 
 pub struct IteratorResource {
     state: Mutex<IteratorState>,
     _owner: ResourceArc<DbResource>,
     _snapshot_owner: Option<ResourceArc<SnapshotResource>>,
+    _lease: Option<DbLease>,
 }
 
 impl Resource for IteratorResource {}
 
 impl IteratorResource {
     fn lock(&self) -> MutexGuard<'_, IteratorState> {
-        self.state.lock().unwrap()
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
 impl DbResource {
     fn new(db: DB) -> Self {
         Self {
-            db: RwLock::new(db),
+            db: RwLock::new(Some(db)),
+            leases: AtomicUsize::new(0),
         }
     }
 
-    fn read(&self) -> RwLockReadGuard<'_, DB> {
-        self.db.read().unwrap()
+    fn read(&self) -> Option<DbReadGuard<'_>> {
+        let guard = self
+            .db
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.as_ref()?;
+        Some(DbReadGuard { guard })
     }
 
-    fn write(&self) -> RwLockWriteGuard<'_, DB> {
-        self.db.write().unwrap()
+    fn write(&self) -> Option<DbWriteGuard<'_>> {
+        let guard = self
+            .db
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.as_ref()?;
+        Some(DbWriteGuard { guard })
     }
+}
+
+macro_rules! db_read {
+    ($env:expr, $resource:expr) => {
+        match $resource.read() {
+            Some(guard) => guard,
+            None => return Ok((error(), closed()).encode($env)),
+        }
+    };
+}
+
+macro_rules! db_write {
+    ($env:expr, $resource:expr) => {
+        match $resource.write() {
+            Some(guard) => guard,
+            None => return Ok((error(), closed()).encode($env)),
+        }
+    };
 }
 
 pub fn on_load(env: Env, _load_info: Term) -> bool {
@@ -83,7 +180,7 @@ pub fn lxcode(env: Env) -> NifResult<Term> {
 
 #[rustler::nif(schedule = "DirtyIo")]
 pub fn latest_sequence_number(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
-    Ok((ok(), resource.read().latest_sequence_number()).encode(env))
+    Ok((ok(), db_read!(env, resource).latest_sequence_number()).encode(env))
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
@@ -120,7 +217,29 @@ pub fn repair(env: Env, path: String, options: RockerOptions) -> NifResult<Term>
 
 #[rustler::nif(schedule = "DirtyIo")]
 pub fn get_db_path(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
-    Ok((ok(), resource.read().path().display().to_string()).encode(env))
+    Ok((ok(), db_read!(env, resource).path().display().to_string()).encode(env))
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn close(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
+    let mut guard = resource
+        .db
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    if guard.is_none() {
+        return Ok(ok().encode(env));
+    }
+
+    if resource.leases.load(Ordering::SeqCst) != 0 {
+        return Ok((error(), resource_busy()).encode(env));
+    }
+
+    if let Some(db) = guard.take() {
+        drop(db);
+    }
+
+    Ok(ok().encode(env))
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
@@ -130,7 +249,7 @@ pub fn put<'a>(
     key: Binary<'a>,
     value: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    match resource.read().put(key.as_slice(), value.as_slice()) {
+    match db_read!(env, resource).put(key.as_slice(), value.as_slice()) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -142,7 +261,7 @@ pub fn get<'a>(
     resource: ResourceArc<DbResource>,
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    match resource.read().get(key.as_slice()) {
+    match db_read!(env, resource).get(key.as_slice()) {
         Ok(Some(value)) => {
             let mut output = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
             output.as_mut_slice().copy_from_slice(value.as_ref());
@@ -159,7 +278,7 @@ pub fn delete<'a>(
     resource: ResourceArc<DbResource>,
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    match resource.read().delete(key.as_slice()) {
+    match db_read!(env, resource).delete(key.as_slice()) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -172,7 +291,7 @@ pub fn merge<'a>(
     key: Binary<'a>,
     operand: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    match resource.read().merge(key.as_slice(), operand.as_slice()) {
+    match db_read!(env, resource).merge(key.as_slice(), operand.as_slice()) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -186,7 +305,7 @@ pub fn merge_cf<'a>(
     key: Binary<'a>,
     operand: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -221,7 +340,7 @@ pub fn write_batch<'a>(
         Err(reason) => return encode_write_options_error(env, reason),
     };
     let operations: ListIterator = operations.decode()?;
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let mut batch = WriteBatch::default();
 
     for operation in operations {
@@ -286,7 +405,7 @@ pub fn flush_wal<'a>(
         Ok(sync) => sync,
         Err(_) => return Ok((error(), invalid_write_options()).encode(env)),
     };
-    match resource.read().flush_wal(sync) {
+    match db_read!(env, resource).flush_wal(sync) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -301,7 +420,7 @@ pub fn delete_range<'a>(
 ) -> NifResult<Term<'a>> {
     let mut batch = WriteBatch::default();
     batch.delete_range(from.as_slice(), to.as_slice());
-    match resource.read().write(&batch) {
+    match db_read!(env, resource).write(&batch) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -317,7 +436,7 @@ pub fn multi_get<'a>(
     let keys: NifResult<Vec<Vec<u8>>> = keys
         .map(|term| term.decode::<Binary>().map(|key| key.as_slice().to_vec()))
         .collect();
-    let values = resource.read().multi_get(keys?);
+    let values = db_read!(env, resource).multi_get(keys?);
     let mut output = Vec::with_capacity(values.len());
 
     for value in values {
@@ -340,7 +459,7 @@ pub fn key_may_exist<'a>(
     resource: ResourceArc<DbResource>,
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    Ok((ok(), resource.read().key_may_exist(key.as_slice())).encode(env))
+    Ok((ok(), db_read!(env, resource).key_may_exist(key.as_slice())).encode(env))
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
@@ -350,7 +469,7 @@ pub fn create_cf(
     name: String,
     options: RockerOptions,
 ) -> NifResult<Term> {
-    match resource.write().create_cf(name, &Options::from(options)) {
+    match db_write!(env, resource).create_cf(name, &Options::from(options)) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -403,7 +522,7 @@ pub fn list_cf(env: Env, path: String, options: RockerOptions) -> NifResult<Term
 
 #[rustler::nif(schedule = "DirtyIo")]
 pub fn drop_cf(env: Env, resource: ResourceArc<DbResource>, name: String) -> NifResult<Term> {
-    match resource.write().drop_cf(&name) {
+    match db_write!(env, resource).drop_cf(&name) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -417,7 +536,7 @@ pub fn put_cf<'a>(
     key: Binary<'a>,
     value: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -434,7 +553,7 @@ pub fn get_cf<'a>(
     name: String,
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -456,7 +575,7 @@ pub fn delete_cf<'a>(
     name: String,
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -474,7 +593,7 @@ pub fn delete_range_cf<'a>(
     from: Binary<'a>,
     to: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -504,7 +623,7 @@ pub fn multi_get_cf<'a>(
         })
         .collect();
     let decoded = decoded?;
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let mut requests = Vec::with_capacity(decoded.len());
     for (name, key) in &decoded {
         let Some(cf) = guard.cf_handle(name) else {
@@ -535,7 +654,7 @@ pub fn key_may_exist_cf<'a>(
     name: String,
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -571,6 +690,7 @@ fn make_iterator_resource(
     owner: ResourceArc<DbResource>,
     iterator: DBIterator<'_>,
 ) -> ResourceArc<IteratorResource> {
+    let lease = DbLease::acquire(owner.clone());
     let iterator = unsafe { std::mem::transmute::<DBIterator<'_>, DBIterator<'static>>(iterator) };
     ResourceArc::new(IteratorResource {
         state: Mutex::new(IteratorState {
@@ -579,6 +699,7 @@ fn make_iterator_resource(
         }),
         _owner: owner,
         _snapshot_owner: None,
+        _lease: Some(lease),
     })
 }
 
@@ -589,7 +710,7 @@ pub fn iterator<'a>(
     mode: Term<'a>,
 ) -> NifResult<Term<'a>> {
     let (name, key, direction) = iterator_mode(mode)?;
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let iterator = match (name.as_str(), key.as_deref()) {
         ("end", _) => guard.iterator(IteratorMode::End),
         ("from", Some(key)) => guard.iterator(IteratorMode::From(key, direction)),
@@ -625,7 +746,7 @@ pub fn iterator_range<'a>(
     }
 
     let (name, key, direction) = iterator_mode(mode)?;
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let iterator = match (name.as_str(), key.as_deref()) {
         ("end", _) => guard.iterator_opt(IteratorMode::End, read_options),
         ("from", Some(key)) => guard.iterator_opt(IteratorMode::From(key, direction), read_options),
@@ -641,7 +762,7 @@ pub fn prefix_iterator<'a>(
     resource: ResourceArc<DbResource>,
     prefix: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let iterator = guard.prefix_iterator(prefix.as_slice());
     let iterator = make_iterator_resource(resource.clone(), iterator);
     Ok((ok(), iterator).encode(env))
@@ -655,7 +776,7 @@ pub fn iterator_cf<'a>(
     mode: Term<'a>,
 ) -> NifResult<Term<'a>> {
     let (mode_name, key, direction) = iterator_mode(mode)?;
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -675,7 +796,7 @@ pub fn prefix_iterator_cf<'a>(
     name: String,
     prefix: Binary<'a>,
 ) -> NifResult<Term<'a>> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let Some(cf) = guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -694,13 +815,15 @@ fn decode_snapshot(resource: Term<'_>) -> NifResult<ResourceArc<SnapshotResource
 
 #[rustler::nif(schedule = "DirtyIo")]
 pub fn snapshot(env: Env, resource: ResourceArc<DbResource>) -> NifResult<Term> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     let snapshot = guard.snapshot();
+    let lease = DbLease::acquire(resource.clone());
     let snapshot = unsafe { std::mem::transmute::<Snapshot<'_>, Snapshot<'static>>(snapshot) };
     drop(guard);
     let snapshot_resource = ResourceArc::new(SnapshotResource {
         snapshot: Mutex::new(snapshot),
         owner: resource.clone(),
+        _lease: lease,
     });
     Ok((ok(), (snap(), resource, snapshot_resource)).encode(env))
 }
@@ -726,7 +849,7 @@ pub fn snapshot_get_cf<'a>(
     key: Binary<'a>,
 ) -> NifResult<Term<'a>> {
     let snapshot = decode_snapshot(resource)?;
-    let db_guard = snapshot.owner.read();
+    let db_guard = db_read!(env, snapshot.owner);
     let Some(cf) = db_guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -789,7 +912,7 @@ pub fn snapshot_multi_get_cf<'a>(
         .collect();
     let decoded = decoded?;
     let snapshot = decode_snapshot(resource)?;
-    let db_guard = snapshot.owner.read();
+    let db_guard = db_read!(env, snapshot.owner);
     let mut requests = Vec::with_capacity(decoded.len());
     for (name, key) in &decoded {
         let Some(cf) = db_guard.cf_handle(name) else {
@@ -825,6 +948,7 @@ fn make_snapshot_iterator_resource(
         }),
         _owner: snapshot.owner.clone(),
         _snapshot_owner: Some(snapshot),
+        _lease: None,
     })
 }
 
@@ -854,7 +978,7 @@ pub fn snapshot_iterator_cf<'a>(
     mode: Term<'a>,
 ) -> NifResult<Term<'a>> {
     let snapshot = decode_snapshot(resource)?;
-    let db_guard = snapshot.owner.read();
+    let db_guard = db_read!(env, snapshot.owner);
     let Some(cf) = db_guard.cf_handle(&name) else {
         return Ok((error(), unknown_cf()).encode(env));
     };
@@ -875,7 +999,7 @@ pub fn create_checkpoint(
     resource: ResourceArc<DbResource>,
     path: String,
 ) -> NifResult<Term> {
-    let guard = resource.read();
+    let guard = db_read!(env, resource);
     match Checkpoint::new(&guard).and_then(|checkpoint| checkpoint.create_checkpoint(path)) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
@@ -907,11 +1031,12 @@ fn open_backup_engine(path: &str) -> Result<BackupEngine, rocksdb::Error> {
 
 #[rustler::nif(schedule = "DirtyIo")]
 pub fn create_backup(env: Env, resource: ResourceArc<DbResource>, path: String) -> NifResult<Term> {
+    let guard = db_read!(env, resource);
     let mut engine = match open_backup_engine(&path) {
         Ok(engine) => engine,
         Err(reason) => return Ok((error(), reason.to_string()).encode(env)),
     };
-    match engine.create_new_backup(&resource.read()) {
+    match engine.create_new_backup(&guard) {
         Ok(()) => Ok((ok(), backup_info(env, &engine)).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }

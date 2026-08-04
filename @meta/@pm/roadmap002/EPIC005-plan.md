@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 5.1: Refactor `DbResource` to explicit open/closed state.
-- [ ] Phase 5.2: Add race-safe dependency lease accounting.
-- [ ] Phase 5.3: Integrate regular and CF iterator lifecycles.
-- [ ] Phase 5.4: Integrate snapshot and snapshot-iterator lifecycles.
-- [ ] Phase 5.5: Implement idempotent `close/1` on `DirtyIo`.
-- [ ] Phase 5.6: Add race, path-lock, process-exit, and GC tests.
-- [ ] Phase 5.7: Run gates and commit.
+- [x] Phase 5.1: Refactor `DbResource` to explicit open/closed state.
+- [x] Phase 5.2: Add race-safe dependency lease accounting.
+- [x] Phase 5.3: Integrate regular and CF iterator lifecycles.
+- [x] Phase 5.4: Integrate snapshot and snapshot-iterator lifecycles.
+- [x] Phase 5.5: Implement idempotent `close/1` on `DirtyIo`.
+- [x] Phase 5.6: Add race, path-lock, process-exit, and GC tests.
+- [x] Phase 5.7: Run gates and commit.
 
 ## Implementation Steps
 
@@ -22,10 +22,10 @@
 
 ## Quality Gate
 
-- [ ] Closed/busy contract tests pass.
-- [ ] Child lease tests pass.
-- [ ] Path reuse and GC tests pass.
-- [ ] Repeated race tests pass.
-- [ ] Supported sanitizer runs pass or record a platform skip reason.
-- [ ] Full source gate passes.
-- [ ] Only EPIC005 changes are committed.
+- [x] Closed/busy contract tests pass.
+- [x] Child lease tests pass.
+- [x] Path reuse and GC tests pass.
+- [x] Repeated race tests pass.
+- [x] Supported sanitizer runs pass or record a platform skip reason.
+- [x] Full source gate passes.
+- [x] Only EPIC005 changes are committed.

@@ -74,6 +74,7 @@ defmodule ExRocket.ContractBaselineTest do
                     )
 
   @nif_schedulers %{
+    "close" => "DirtyIo",
     "create_backup" => "DirtyIo",
     "create_cf" => "DirtyIo",
     "create_checkpoint" => "DirtyIo",

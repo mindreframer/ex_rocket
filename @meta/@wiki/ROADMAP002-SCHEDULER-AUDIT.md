@@ -14,6 +14,7 @@ is checked mechanically by `test/contract_baseline_test.exs`.
 | `get_db_path` | DirtyIo | Takes the database resource lock, which can wait behind metadata mutation or close. |
 | `open`, `open_for_read_only`, `open_cf`, `open_cf_for_read_only` | DirtyIo | Opens files, acquires filesystem locks, and may recover RocksDB state. |
 | `destroy`, `repair` | DirtyIo | Performs blocking filesystem/database maintenance. |
+| `close` | DirtyIo | Waits for the exclusive database lock and drops RocksDB, which can wait for background work and path-lock release. |
 | `put`, `get`, `delete`, `merge` | DirtyIo | Can access storage, WAL, memtables, caches, and native locks. |
 | `put_cf`, `get_cf`, `delete_cf`, `merge_cf` | DirtyIo | Resolves a CF under the DB lock and can access storage/WAL. |
 | `write_batch`, `flush_wal` | DirtyIo | Writes WAL/storage or explicitly waits for a WAL flush/sync. |
@@ -31,11 +32,10 @@ is checked mechanically by `test/contract_baseline_test.exs`.
 | `create_checkpoint` | DirtyIo | Creates filesystem links/files and waits on RocksDB state. |
 | `create_backup`, `get_backup_info`, `purge_old_backups`, `restore_from_backup` | DirtyIo | Opens backup storage and performs filesystem/database operations. |
 
-## Required Follow-Up
+## Maintenance Rule
 
-EPIC005 must add `close/1` as `DirtyIo`: dropping RocksDB can wait for background
-work and filesystem lock release. Every future `#[rustler::nif]` export must be
-added to the mechanical inventory and this audit before CI can pass.
+Every future `#[rustler::nif]` export must be added to the mechanical inventory
+and this audit before CI can pass.
 
 ## Benchmark Dimensions
 
