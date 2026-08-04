@@ -1,7 +1,10 @@
 # ExRocket
 
-[![Tests](https://github.com/mindreframer/ex_rocket/actions/workflows/elixir.yml/badge.svg?branch=main)](https://github.com/mindreframer/ex_rocket/actions/workflows/elixir.yml)
-[![Build precompiled NIFs](https://github.com/mindreframer/ex_rocket/actions/workflows/release_with_caching.yml/badge.svg?branch=main)](https://github.com/mindreframer/ex_rocket/actions/workflows/release_with_caching.yml)
+[![Hex.pm](https://img.shields.io/hexpm/v/ex_rocket.svg)](https://hex.pm/packages/ex_rocket)
+[![HexDocs](https://img.shields.io/badge/HexDocs-API%20reference-6e4a7e.svg)](https://hexdocs.pm/ex_rocket)
+[![CI](https://github.com/mindreframer/ex_rocket/actions/workflows/elixir.yml/badge.svg?branch=main)](https://github.com/mindreframer/ex_rocket/actions/workflows/elixir.yml)
+[![Precompiled NIFs](https://github.com/mindreframer/ex_rocket/actions/workflows/release_with_caching.yml/badge.svg?branch=main)](https://github.com/mindreframer/ex_rocket/actions/workflows/release_with_caching.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/mindreframer/ex_rocket/blob/main/LICENSE)
 
 ## About
 
@@ -18,7 +21,7 @@ Add `ex_rocket` to the dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ex_rocket, "~> 0.4"}
+    {:ex_rocket, "~> 0.5"}
   ]
 end
 ```
