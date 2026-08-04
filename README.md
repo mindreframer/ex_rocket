@@ -66,8 +66,14 @@ flush. ExRocket 0.5.0 adds `write_batch/3` for explicit durability boundaries:
   )
 ```
 
-Do not combine `sync: true` with `disable_wal: true`; a synchronous WAL guarantee
-cannot be provided while the WAL is disabled.
+The write-option defaults are `%{sync: false, disable_wal: false}`. Do not
+combine `sync: true` with `disable_wal: true`; a synchronous WAL guarantee
+cannot be provided while the WAL is disabled. WAL-disabled writes are intended
+only for rebuildable bulk-load data.
+
+Applications that deliberately group non-synchronous writes can establish a
+separate WAL boundary with `ExRocket.flush_wal(db, true)`. A synchronous clean
+checkpoint written with `write_batch/3` is usually easier to reason about.
 
 Use a column family to keep related data separate:
 

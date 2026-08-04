@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 2.1: Add the native write-options decoder.
-- [ ] Phase 2.2: Implement `write_batch/3` through `DB::write_opt`.
-- [ ] Phase 2.3: Preserve `write_batch/2` through compatibility delegation.
-- [ ] Phase 2.4: Add exact durability-option validation.
-- [ ] Phase 2.5: Implement the conditional WAL flush boundary.
-- [ ] Phase 2.6: Add crash-process durability tests.
-- [ ] Phase 2.7: Run gates and commit.
+- [x] Phase 2.1: Add the native write-options decoder.
+- [x] Phase 2.2: Implement `write_batch/3` through `DB::write_opt`.
+- [x] Phase 2.3: Preserve `write_batch/2` through compatibility delegation.
+- [x] Phase 2.4: Add exact durability-option validation.
+- [x] Phase 2.5: Implement the conditional WAL flush boundary.
+- [x] Phase 2.6: Add crash-process durability tests.
+- [x] Phase 2.7: Run gates and commit.
 
 ## Implementation Steps
 
@@ -22,9 +22,9 @@
 
 ## Quality Gate
 
-- [ ] Compatibility and atomicity tests pass.
-- [ ] Write-option validation tests pass.
-- [ ] Crash/reopen durability tests pass.
-- [ ] Native source build passes.
-- [ ] Full suite passes.
-- [ ] Only EPIC002 changes are committed.
+- [x] Compatibility and atomicity tests pass.
+- [x] Write-option validation tests pass.
+- [x] Crash/reopen durability tests pass.
+- [x] Native source build passes.
+- [x] Full suite passes.
+- [x] Only EPIC002 changes are committed.

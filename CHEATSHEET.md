@@ -240,8 +240,12 @@ ops = [
 {:ok, "updated"} = ExRocket.get(db, "status")
 
 # Atomicity controls all-or-nothing visibility. Durability controls whether an
-# acknowledged write survives machine failure. Default batches keep the WAL
-# enabled but do not request a synchronous filesystem flush.
+# acknowledged write survives machine failure. Default batches use
+# %{sync: false, disable_wal: false}: WAL enabled without a synchronous flush.
+# WAL-disabled writes are suitable only for rebuildable bulk-load data.
+
+# Establish a separate WAL durability boundary after grouped writes
+:ok = ExRocket.flush_wal(db, true)
 
 # Example: ETF merge in batch (requires erlang_merge_operator)
 {:ok, db} = ExRocket.open("my_db", %{

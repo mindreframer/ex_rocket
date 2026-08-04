@@ -94,7 +94,7 @@ defmodule ExRocket do
 
   @spec write_batch(db(), [batch_operation()]) ::
           {:ok, non_neg_integer()} | {:error, term()}
-  def write_batch(_db_ref, _operations), do: Erlang.nif_error(:nif_not_loaded)
+  def write_batch(db_ref, operations), do: write_batch(db_ref, operations, %{})
 
   @spec write_batch(db(), [batch_operation()], write_options()) ::
           {:ok, non_neg_integer()} | {:error, term()}

@@ -1,11 +1,16 @@
-use crate::atoms::{backup, end_of_iterator, error, ok, snap, undefined, unknown_cf, vsn1};
+use crate::atoms::{
+    backup, end_of_iterator, error, invalid_write_options, ok, snap, undefined, unknown_cf,
+    unknown_option, vsn1,
+};
 use crate::options::RockerOptions;
 use crate::read_options::RockerReadOptions;
+use crate::write_options::{RockerWriteOptions, WriteOptionsError};
 use rocksdb::{
     DB, DBIterator, Direction, IteratorMode, Options, ReadOptions, Snapshot, WriteBatch,
     backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
     checkpoint::Checkpoint,
 };
+use rustler::types::atom::Atom;
 use rustler::types::list::ListIterator;
 use rustler::{Binary, Encoder, Env, NifResult, OwnedBinary, Resource, ResourceArc, Term};
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -185,12 +190,30 @@ pub fn merge_cf<'a>(
     }
 }
 
+fn encode_write_options_error<'a>(
+    env: Env<'a>,
+    validation_error: WriteOptionsError,
+) -> NifResult<Term<'a>> {
+    match validation_error {
+        WriteOptionsError::Invalid => Ok((error(), invalid_write_options()).encode(env)),
+        WriteOptionsError::Unknown(key) => {
+            let key = Atom::from_str(env, &key)?;
+            Ok((error(), (unknown_option(), key)).encode(env))
+        }
+    }
+}
+
 #[rustler::nif(schedule = "DirtyIo")]
 pub fn write_batch<'a>(
     env: Env<'a>,
     resource: ResourceArc<DbResource>,
     operations: Term<'a>,
+    write_options: Term<'a>,
 ) -> NifResult<Term<'a>> {
+    let write_options = match RockerWriteOptions::decode(write_options) {
+        Ok(options) => options.into(),
+        Err(reason) => return encode_write_options_error(env, reason),
+    };
     let operations: ListIterator = operations.decode()?;
     let guard = resource.read();
     let mut batch = WriteBatch::default();
@@ -241,8 +264,24 @@ pub fn write_batch<'a>(
     }
 
     let applied = batch.len();
-    match guard.write(&batch) {
+    match guard.write_opt(&batch, &write_options) {
         Ok(()) => Ok((ok(), applied).encode(env)),
+        Err(reason) => Ok((error(), reason.to_string()).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn flush_wal<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<DbResource>,
+    sync: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let sync = match sync.decode::<bool>() {
+        Ok(sync) => sync,
+        Err(_) => return Ok((error(), invalid_write_options()).encode(env)),
+    };
+    match resource.read().flush_wal(sync) {
+        Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
 }

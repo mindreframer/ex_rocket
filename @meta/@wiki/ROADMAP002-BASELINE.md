@@ -84,6 +84,12 @@ Write and iterator-take option decoders do not exist at baseline. Public example
 must use canonical names such as `set_max_open_files` and
 `set_write_buffer_size`.
 
+## Roadmap Evolution
+
+The mechanically checked NIF list is updated as epics add exports. EPIC002 adds
+`flush_wal` on `DirtyIo` and changes the native `write_batch` export from arity
+2 to arity 3 while the Elixir `write_batch/2` compatibility wrapper remains.
+
 ## Protected Compatibility Semantics
 
 - `write_batch/2` uses WAL-enabled, non-synchronous RocksDB defaults and returns

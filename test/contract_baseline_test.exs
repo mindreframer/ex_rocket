@@ -87,6 +87,7 @@ defmodule ExRocket.ContractBaselineTest do
     "get_backup_info" => "DirtyIo",
     "get_cf" => "Normal",
     "get_db_path" => "Normal",
+    "flush_wal" => "DirtyIo",
     "iterator" => "Normal",
     "iterator_cf" => "Normal",
     "iterator_range" => "Normal",

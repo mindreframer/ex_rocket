@@ -157,5 +157,59 @@ defmodule ExRocket.Atomic.Test do
       # 100 + 25 + 15 = 140
       {:ok, "140"} = ExRocket.get_cf(db, "counters", "total")
     end
+
+    test "write_batch/3 applies explicit durability options to default and CF tuples", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+      :ok = ExRocket.create_cf(db, "projection")
+
+      assert {:ok, 2} =
+               ExRocket.write_batch(
+                 db,
+                 [
+                   {:put, "checkpoint", "clean:1"},
+                   {:put_cf, "projection", "row", "value"}
+                 ],
+                 %{sync: true}
+               )
+
+      assert {:ok, "clean:1"} = ExRocket.get(db, "checkpoint")
+      assert {:ok, "value"} = ExRocket.get_cf(db, "projection", "row")
+
+      assert {:ok, 1} =
+               ExRocket.write_batch(db, [{:put, "rebuildable", "value"}], %{
+                 disable_wal: true
+               })
+
+      assert {:ok, "value"} = ExRocket.get(db, "rebuildable")
+    end
+
+    test "write durability validation fails before mutation", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+
+      assert {:error, {:unknown_option, :synch}} =
+               ExRocket.write_batch(db, [{:put, "unknown", "value"}], %{synch: true})
+
+      assert {:error, :invalid_write_options} =
+               ExRocket.write_batch(db, [{:put, "bad-type", "value"}], %{sync: :yes})
+
+      assert {:error, :invalid_write_options} =
+               ExRocket.write_batch(db, [{:put, "contradictory", "value"}], %{
+                 sync: true,
+                 disable_wal: true
+               })
+
+      assert :undefined = ExRocket.get(db, "unknown")
+      assert :undefined = ExRocket.get(db, "bad-type")
+      assert :undefined = ExRocket.get(db, "contradictory")
+    end
+
+    test "flush_wal/2 supports native sync semantics and validates input", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+      :ok = ExRocket.put(db, "key", "value")
+
+      assert :ok = ExRocket.flush_wal(db, false)
+      assert :ok = ExRocket.flush_wal(db, true)
+      assert {:error, :invalid_write_options} = ExRocket.flush_wal(db, :sync)
+    end
   end
 end
