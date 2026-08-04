@@ -436,6 +436,12 @@ true = ExRocket.key_may_exist_cf(db, "my_cf", "key")
 ## Common Patterns
 
 ### Database Options
+
+Use exact native decoder keys. Unknown keys return
+`{:error, {:unknown_option, key}}` and malformed values return
+`{:error, {:invalid_option, key}}`; they are never silently ignored. See
+[`OPTIONS.md`](OPTIONS.md) for the complete accepted inventory.
+
 ```elixir
 options = %{
   create_if_missing: true,

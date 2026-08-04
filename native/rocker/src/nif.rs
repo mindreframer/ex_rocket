@@ -1,10 +1,11 @@
 use crate::atoms::{
-    backup, closed, end_of_iterator, error, invalid_iterator_options, invalid_write_options, more,
-    ok, resource_busy, snap, undefined, unknown_cf, unknown_option, vsn1,
+    backup, closed, end_of_iterator, error, invalid_iterator_options, invalid_option,
+    invalid_write_options, more, ok, resource_busy, snap, undefined, unknown_cf, unknown_option,
+    vsn1,
 };
 use crate::iterator_options::{IteratorOptionsError, IteratorTakeOptions};
-use crate::options::RockerOptions;
-use crate::read_options::RockerReadOptions;
+use crate::options::{OptionsError, RockerOptions};
+use crate::read_options::{ReadOptionsError, RockerReadOptions};
 use crate::write_options::{RockerWriteOptions, WriteOptionsError};
 use rocksdb::{
     DB, DBIterator, Direction, IteratorMode, Options, ReadOptions, Snapshot, WriteBatch,
@@ -167,6 +168,39 @@ macro_rules! db_write {
     };
 }
 
+fn encode_named_option_error<'a>(env: Env<'a>, kind: Atom, key: &str) -> NifResult<Term<'a>> {
+    let key = Atom::from_str(env, key)?;
+    Ok((error(), (kind, key)).encode(env))
+}
+
+macro_rules! db_options {
+    ($env:expr, $term:expr) => {
+        match RockerOptions::decode($term) {
+            Ok(options) => Options::from(options),
+            Err(OptionsError::Unknown(key)) => {
+                return encode_named_option_error($env, unknown_option(), &key)
+            }
+            Err(OptionsError::Invalid(key)) => {
+                return encode_named_option_error($env, invalid_option(), &key)
+            }
+        }
+    };
+}
+
+macro_rules! read_options {
+    ($env:expr, $term:expr) => {
+        match RockerReadOptions::decode($term) {
+            Ok(options) => ReadOptions::from(options),
+            Err(ReadOptionsError::Unknown(key)) => {
+                return encode_named_option_error($env, unknown_option(), &key)
+            }
+            Err(ReadOptionsError::Invalid(key)) => {
+                return encode_named_option_error($env, invalid_option(), &key)
+            }
+        }
+    };
+}
+
 pub fn on_load(env: Env, _load_info: Term) -> bool {
     env.register::<DbResource>().is_ok()
         && env.register::<SnapshotResource>().is_ok()
@@ -184,32 +218,40 @@ pub fn latest_sequence_number(env: Env, resource: ResourceArc<DbResource>) -> Ni
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn open(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
-    match DB::open(&Options::from(options), path) {
+pub fn open<'a>(env: Env<'a>, path: String, options: Term<'a>) -> NifResult<Term<'a>> {
+    let options = db_options!(env, options);
+    match DB::open(&options, path) {
         Ok(db) => Ok((ok(), ResourceArc::new(DbResource::new(db))).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn open_for_read_only(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
-    match DB::open_for_read_only(&Options::from(options), path, false) {
+pub fn open_for_read_only<'a>(
+    env: Env<'a>,
+    path: String,
+    options: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let options = db_options!(env, options);
+    match DB::open_for_read_only(&options, path, false) {
         Ok(db) => Ok((ok(), ResourceArc::new(DbResource::new(db))).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn destroy(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
-    match DB::destroy(&Options::from(options), path) {
+pub fn destroy<'a>(env: Env<'a>, path: String, options: Term<'a>) -> NifResult<Term<'a>> {
+    let options = db_options!(env, options);
+    match DB::destroy(&options, path) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn repair(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
-    match DB::repair(&Options::from(options), path) {
+pub fn repair<'a>(env: Env<'a>, path: String, options: Term<'a>) -> NifResult<Term<'a>> {
+    let options = db_options!(env, options);
+    match DB::repair(&options, path) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -463,13 +505,14 @@ pub fn key_may_exist<'a>(
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn create_cf(
-    env: Env,
+pub fn create_cf<'a>(
+    env: Env<'a>,
     resource: ResourceArc<DbResource>,
     name: String,
-    options: RockerOptions,
-) -> NifResult<Term> {
-    match db_write!(env, resource).create_cf(name, &Options::from(options)) {
+    options: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let options = db_options!(env, options);
+    match db_write!(env, resource).create_cf(name, &options) {
         Ok(()) => Ok(ok().encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -486,9 +529,10 @@ pub fn open_cf<'a>(
     env: Env<'a>,
     path: String,
     names: Term<'a>,
-    options: RockerOptions,
+    options: Term<'a>,
 ) -> NifResult<Term<'a>> {
-    match DB::open_cf(&Options::from(options), path, decode_cf_names(names)?) {
+    let options = db_options!(env, options);
+    match DB::open_cf(&options, path, decode_cf_names(names)?) {
         Ok(db) => Ok((ok(), ResourceArc::new(DbResource::new(db))).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -499,22 +543,19 @@ pub fn open_cf_for_read_only<'a>(
     env: Env<'a>,
     path: String,
     names: Term<'a>,
-    options: RockerOptions,
+    options: Term<'a>,
 ) -> NifResult<Term<'a>> {
-    match DB::open_cf_for_read_only(
-        &Options::from(options),
-        path,
-        decode_cf_names(names)?,
-        false,
-    ) {
+    let options = db_options!(env, options);
+    match DB::open_cf_for_read_only(&options, path, decode_cf_names(names)?, false) {
         Ok(db) => Ok((ok(), ResourceArc::new(DbResource::new(db))).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
 }
 
 #[rustler::nif(schedule = "DirtyIo")]
-pub fn list_cf(env: Env, path: String, options: RockerOptions) -> NifResult<Term> {
-    match DB::list_cf(&Options::from(options), path) {
+pub fn list_cf<'a>(env: Env<'a>, path: String, options: Term<'a>) -> NifResult<Term<'a>> {
+    let options = db_options!(env, options);
+    match DB::list_cf(&options, path) {
         Ok(names) => Ok((ok(), names).encode(env)),
         Err(reason) => Ok((error(), reason.to_string()).encode(env)),
     }
@@ -727,9 +768,9 @@ pub fn iterator_range<'a>(
     mode: Term<'a>,
     from: Term<'a>,
     to: Term<'a>,
-    read_options: RockerReadOptions,
+    read_options: Term<'a>,
 ) -> NifResult<Term<'a>> {
-    let mut read_options = ReadOptions::from(read_options);
+    let mut read_options = read_options!(env, read_options);
     let from_key = from
         .decode::<Binary>()
         .ok()

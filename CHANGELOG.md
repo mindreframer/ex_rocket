@@ -1,3 +1,19 @@
+# 0.5.0 - Unreleased
+
+- Added explicit batch durability through `write_batch/3` and synchronous or
+  non-synchronous WAL boundaries through `flush_wal/2`.
+- Added bounded `iterator_take/2` pages with entry/payload limits and stable
+  snapshot/iterator continuation.
+- Moved storage- and lock-backed native operations to dirty I/O schedulers.
+- Added idempotent `close/1` with safe iterator/snapshot lease handling and
+  stable `:closed`/`:resource_busy` errors.
+- Corrected iterator terminal and database-option documentation.
+- **Breaking validation change:** unknown database, read, write, and iterator
+  option keys now return `{:error, {:unknown_option, key}}` instead of being
+  silently ignored. Malformed database/read values identify the invalid key.
+- Added canonical option and 0.5.0 migration references. Existing RocksDB files
+  require no migration.
+
 # 0.4.1 - 2026-07-27
 
 - Reworked the README with concise, tested examples for key/value operations,

@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 6.1: Build the canonical public option inventory.
-- [ ] Phase 6.2: Reject unknown options with structured errors.
-- [ ] Phase 6.3: Enforce exact value and combination validation.
-- [ ] Phase 6.4: Complete reference documentation.
-- [ ] Phase 6.5: Add executable documentation examples.
-- [ ] Phase 6.6: Write ExRocket 0.5.0 migration guidance.
-- [ ] Phase 6.7: Run gates and commit.
+- [x] Phase 6.1: Build the canonical public option inventory.
+- [x] Phase 6.2: Reject unknown options with structured errors.
+- [x] Phase 6.3: Enforce exact value and combination validation.
+- [x] Phase 6.4: Complete reference documentation.
+- [x] Phase 6.5: Add executable documentation examples.
+- [x] Phase 6.6: Write ExRocket 0.5.0 migration guidance.
+- [x] Phase 6.7: Run gates and commit.
 
 ## Implementation Steps
 
@@ -22,9 +22,9 @@
 
 ## Quality Gate
 
-- [ ] Canonical inventory checks pass.
-- [ ] Unknown/value validation tests pass.
-- [ ] Documentation checks/examples pass.
-- [ ] 0.5.0 migration notes are complete.
-- [ ] Full source gate passes.
-- [ ] Only EPIC006 changes are committed.
+- [x] Canonical inventory checks pass.
+- [x] Unknown/value validation tests pass.
+- [x] Documentation checks/examples pass.
+- [x] 0.5.0 migration notes are complete.
+- [x] Full source gate passes.
+- [x] Only EPIC006 changes are committed.

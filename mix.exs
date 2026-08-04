@@ -66,6 +66,8 @@ defmodule ExRocket.MixProject do
         "mix.exs",
         "README*",
         "CHEATSHEET.md",
+        "OPTIONS.md",
+        "UPGRADING.md",
         "LICENSE*",
         "CHANGELOG*"
       ]
@@ -75,7 +77,7 @@ defmodule ExRocket.MixProject do
   defp docs do
     [
       main: "ExRocket",
-      extras: ["README.md", "CHANGELOG.md", "CHEATSHEET.md"]
+      extras: ["README.md", "CHANGELOG.md", "CHEATSHEET.md", "OPTIONS.md", "UPGRADING.md"]
     ]
   end
 end

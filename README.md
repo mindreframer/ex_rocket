@@ -114,7 +114,12 @@ A live iterator or snapshot keeps its native owner safe, so close returns
 close drops RocksDB and releases its filesystem lock before returning; normal
 resource garbage collection remains a fallback.
 
-See the [full cheatsheet](https://github.com/mindreframer/ex_rocket/blob/main/CHEATSHEET.md) for iterators, merge operators, snapshots, checkpoints, backups, options, and error-handling patterns.
+See the
+[full cheatsheet](https://github.com/mindreframer/ex_rocket/blob/main/CHEATSHEET.md)
+for iterators, merge operators, snapshots, checkpoints, backups, and
+error-handling patterns. Configuration keys and types are defined in the
+[canonical option reference](OPTIONS.md); existing applications should follow
+the [0.5.0 upgrade guide](UPGRADING.md).
 
 ## Technology
 

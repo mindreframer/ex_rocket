@@ -92,7 +92,8 @@ The mechanically checked NIF list is updated as epics add exports. EPIC002 adds
 EPIC003 adds bounded `iterator_take` and moves `next` to `DirtyIo`; EPIC004
 completes the scheduler audit for all remaining exports. EPIC005 adds `close`
 on `DirtyIo` and changes database state to `RwLock<Option<DB>>` with dependent
-leases.
+leases. EPIC006 replaces silent database/read-option fallback with exact
+`unknown_option` and `invalid_option` results backed by `OPTIONS.md`.
 
 ## Protected Compatibility Semantics
 

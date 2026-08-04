@@ -1,8 +1,14 @@
 use crate::merge::{bitset_merge, counter_merge, erlang_merge};
 use libc::{c_double, c_int, c_uint, size_t};
 use rocksdb::{DBCompactionStyle, DBCompressionType, DBRecoveryMode, LogLevel, Options};
-use rustler::{Decoder, NifResult, Term};
+use rustler::Term;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug)]
+pub enum OptionsError {
+    Unknown(String),
+    Invalid(String),
+}
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct RockerOptions {
@@ -62,7 +68,6 @@ pub struct RockerOptions {
     pub set_inplace_update_support: Option<bool>,
     pub set_inplace_update_locks: Option<usize>,
     pub set_max_bytes_for_level_multiplier_additional: Option<String>,
-    pub set_skip_checking_sst_file_sizes_on_db_open: Option<bool>,
     pub set_max_write_buffer_size_to_maintain: Option<i64>,
     pub set_enable_pipelined_write: Option<bool>,
     pub set_min_level_to_compress: Option<c_int>,
@@ -170,7 +175,6 @@ impl Default for RockerOptions {
             set_inplace_update_support: None,
             set_inplace_update_locks: None,
             set_max_bytes_for_level_multiplier_additional: None,
-            set_skip_checking_sst_file_sizes_on_db_open: None,
             set_max_write_buffer_size_to_maintain: None,
             set_enable_pipelined_write: None,
             set_min_level_to_compress: None,
@@ -221,226 +225,797 @@ impl Default for RockerOptions {
     }
 }
 
-impl<'a> Decoder<'a> for RockerOptions {
-    fn decode(term: Term<'a>) -> NifResult<Self> {
+impl RockerOptions {
+    pub fn decode(term: Term<'_>) -> Result<Self, OptionsError> {
         let mut opts = Self::default();
-        use rustler::{Error, MapIterator};
-        for (key, value) in MapIterator::new(term).ok_or(Error::BadArg)? {
-            match key.atom_to_string()?.as_ref() {
-                "create_if_missing" => opts.create_if_missing = Some(value.decode()?),
-                "create_missing_column_families" => {
-                    opts.create_missing_column_families = Some(value.decode()?)
+        let iterator = rustler::MapIterator::new(term)
+            .ok_or_else(|| OptionsError::Invalid("options".to_string()))?;
+
+        for (key, value) in iterator {
+            let key = key
+                .atom_to_string()
+                .map_err(|_| OptionsError::Invalid("options".to_string()))?;
+            match key.as_str() {
+                "create_if_missing" => {
+                    opts.create_if_missing = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_error_if_exists" => opts.set_error_if_exists = Some(value.decode()?),
-                "set_paranoid_checks" => opts.set_paranoid_checks = Some(value.decode()?),
-                "increase_parallelism" => opts.increase_parallelism = Some(value.decode()?),
+                "create_missing_column_families" => {
+                    opts.create_missing_column_families = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_error_if_exists" => {
+                    opts.set_error_if_exists = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_paranoid_checks" => {
+                    opts.set_paranoid_checks = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "increase_parallelism" => {
+                    opts.increase_parallelism = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "optimize_level_style_compaction" => {
-                    opts.optimize_level_style_compaction = Some(value.decode()?)
+                    opts.optimize_level_style_compaction = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "optimize_universal_style_compaction" => {
-                    opts.optimize_universal_style_compaction = Some(value.decode()?)
+                    opts.optimize_universal_style_compaction = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_compression_type" => opts.set_compression_type = Some(value.decode()?),
+                "set_compression_type" => {
+                    opts.set_compression_type = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 // "set_compression_options_parallel_threads" => {
-                //     opts.set_compression_options_parallel_threads = Some(value.decode()?)
+                //     opts.set_compression_options_parallel_threads = Some(value.decode().map_err(|_| OptionsError::Invalid(key.clone()))?)
                 // }
-                // "set_wal_compression_type" => opts.set_wal_compression_type = Some(value.decode()?),
+                // "set_wal_compression_type" => opts.set_wal_compression_type = Some(value.decode().map_err(|_| OptionsError::Invalid(key.clone()))?),
                 "set_bottommost_compression_type" => {
-                    opts.set_bottommost_compression_type = Some(value.decode()?)
+                    opts.set_bottommost_compression_type = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_zstd_max_train_bytes" => opts.set_zstd_max_train_bytes = Some(value.decode()?),
+                "set_zstd_max_train_bytes" => {
+                    opts.set_zstd_max_train_bytes = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_compaction_readahead_size" => {
-                    opts.set_compaction_readahead_size = Some(value.decode()?)
+                    opts.set_compaction_readahead_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_level_compaction_dynamic_level_bytes" => {
-                    opts.set_level_compaction_dynamic_level_bytes = Some(value.decode()?)
+                    opts.set_level_compaction_dynamic_level_bytes = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 // "set_periodic_compaction_seconds" => {
-                //     opts.set_periodic_compaction_seconds = Some(value.decode()?)
+                //     opts.set_periodic_compaction_seconds = Some(value.decode().map_err(|_| OptionsError::Invalid(key.clone()))?)
                 // }
                 "set_optimize_filters_for_hits" => {
-                    opts.set_optimize_filters_for_hits = Some(value.decode()?)
+                    opts.set_optimize_filters_for_hits = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_delete_obsolete_files_period_micros" => {
-                    opts.set_delete_obsolete_files_period_micros = Some(value.decode()?)
+                    opts.set_delete_obsolete_files_period_micros = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_max_open_files" => opts.set_max_open_files = Some(value.decode()?),
+                "set_max_open_files" => {
+                    opts.set_max_open_files = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_max_file_opening_threads" => {
-                    opts.set_max_file_opening_threads = Some(value.decode()?)
+                    opts.set_max_file_opening_threads = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_use_fsync" => opts.set_use_fsync = Some(value.decode()?),
-                "set_db_log_dir" => opts.set_db_log_dir = Some(value.decode()?),
-                "set_log_level" => opts.set_log_level = Some(value.decode()?),
-                "set_bytes_per_sync" => opts.set_bytes_per_sync = Some(value.decode()?),
-                "set_wal_bytes_per_sync" => opts.set_wal_bytes_per_sync = Some(value.decode()?),
+                "set_use_fsync" => {
+                    opts.set_use_fsync = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_db_log_dir" => {
+                    opts.set_db_log_dir = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_log_level" => {
+                    opts.set_log_level = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_bytes_per_sync" => {
+                    opts.set_bytes_per_sync = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_wal_bytes_per_sync" => {
+                    opts.set_wal_bytes_per_sync = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_writable_file_max_buffer_size" => {
-                    opts.set_writable_file_max_buffer_size = Some(value.decode()?)
+                    opts.set_writable_file_max_buffer_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_allow_concurrent_memtable_write" => {
-                    opts.set_allow_concurrent_memtable_write = Some(value.decode()?)
+                    opts.set_allow_concurrent_memtable_write = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_enable_write_thread_adaptive_yield" => {
-                    opts.set_enable_write_thread_adaptive_yield = Some(value.decode()?)
+                    opts.set_enable_write_thread_adaptive_yield = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_max_sequential_skip_in_iterations" => {
-                    opts.set_max_sequential_skip_in_iterations = Some(value.decode()?)
+                    opts.set_max_sequential_skip_in_iterations = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_use_direct_reads" => opts.set_use_direct_reads = Some(value.decode()?),
+                "set_use_direct_reads" => {
+                    opts.set_use_direct_reads = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_use_direct_io_for_flush_and_compaction" => {
-                    opts.set_use_direct_io_for_flush_and_compaction = Some(value.decode()?)
+                    opts.set_use_direct_io_for_flush_and_compaction = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_is_fd_close_on_exec" => opts.set_is_fd_close_on_exec = Some(value.decode()?),
+                "set_is_fd_close_on_exec" => {
+                    opts.set_is_fd_close_on_exec = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_table_cache_num_shard_bits" => {
-                    opts.set_table_cache_num_shard_bits = Some(value.decode()?)
+                    opts.set_table_cache_num_shard_bits = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_target_file_size_multiplier" => {
-                    opts.set_target_file_size_multiplier = Some(value.decode()?)
+                    opts.set_target_file_size_multiplier = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_min_write_buffer_number" => {
-                    opts.set_min_write_buffer_number = Some(value.decode()?)
+                    opts.set_min_write_buffer_number = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_max_write_buffer_number" => {
-                    opts.set_max_write_buffer_number = Some(value.decode()?)
+                    opts.set_max_write_buffer_number = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_write_buffer_size" => opts.set_write_buffer_size = Some(value.decode()?),
-                "set_db_write_buffer_size" => opts.set_db_write_buffer_size = Some(value.decode()?),
+                "set_write_buffer_size" => {
+                    opts.set_write_buffer_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_db_write_buffer_size" => {
+                    opts.set_db_write_buffer_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_max_bytes_for_level_base" => {
-                    opts.set_max_bytes_for_level_base = Some(value.decode()?)
+                    opts.set_max_bytes_for_level_base = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_max_bytes_for_level_multiplier" => {
-                    opts.set_max_bytes_for_level_multiplier = Some(value.decode()?)
+                    opts.set_max_bytes_for_level_multiplier = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_max_manifest_file_size" => {
-                    opts.set_max_manifest_file_size = Some(value.decode()?)
+                    opts.set_max_manifest_file_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_target_file_size_base" => {
-                    opts.set_target_file_size_base = Some(value.decode()?)
+                    opts.set_target_file_size_base = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_min_write_buffer_number_to_merge" => {
-                    opts.set_min_write_buffer_number_to_merge = Some(value.decode()?)
+                    opts.set_min_write_buffer_number_to_merge = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_level_zero_file_num_compaction_trigger" => {
-                    opts.set_level_zero_file_num_compaction_trigger = Some(value.decode()?)
+                    opts.set_level_zero_file_num_compaction_trigger = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_level_zero_slowdown_writes_trigger" => {
-                    opts.set_level_zero_slowdown_writes_trigger = Some(value.decode()?)
+                    opts.set_level_zero_slowdown_writes_trigger = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_level_zero_stop_writes_trigger" => {
-                    opts.set_level_zero_stop_writes_trigger = Some(value.decode()?)
+                    opts.set_level_zero_stop_writes_trigger = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_compaction_style" => opts.set_compaction_style = Some(value.decode()?),
-                "set_unordered_write" => opts.set_unordered_write = Some(value.decode()?),
-                "set_max_subcompactions" => opts.set_max_subcompactions = Some(value.decode()?),
-                "set_max_background_jobs" => opts.set_max_background_jobs = Some(value.decode()?),
+                "set_compaction_style" => {
+                    opts.set_compaction_style = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_unordered_write" => {
+                    opts.set_unordered_write = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_max_subcompactions" => {
+                    opts.set_max_subcompactions = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_max_background_jobs" => {
+                    opts.set_max_background_jobs = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_disable_auto_compactions" => {
-                    opts.set_disable_auto_compactions = Some(value.decode()?)
+                    opts.set_disable_auto_compactions = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_memtable_huge_page_size" => {
-                    opts.set_memtable_huge_page_size = Some(value.decode()?)
+                    opts.set_memtable_huge_page_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_max_successive_merges" => {
-                    opts.set_max_successive_merges = Some(value.decode()?)
+                    opts.set_max_successive_merges = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_bloom_locality" => opts.set_bloom_locality = Some(value.decode()?),
+                "set_bloom_locality" => {
+                    opts.set_bloom_locality = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_inplace_update_support" => {
-                    opts.set_inplace_update_support = Some(value.decode()?)
+                    opts.set_inplace_update_support = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_inplace_update_locks" => opts.set_inplace_update_locks = Some(value.decode()?),
+                "set_inplace_update_locks" => {
+                    opts.set_inplace_update_locks = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_max_bytes_for_level_multiplier_additional" => {
-                    opts.set_max_bytes_for_level_multiplier_additional = Some(value.decode()?)
-                }
-                "set_skip_checking_sst_file_sizes_on_db_open" => {
-                    opts.set_skip_checking_sst_file_sizes_on_db_open = Some(value.decode()?)
+                    opts.set_max_bytes_for_level_multiplier_additional = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_max_write_buffer_size_to_maintain" => {
-                    opts.set_max_write_buffer_size_to_maintain = Some(value.decode()?)
+                    opts.set_max_write_buffer_size_to_maintain = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_enable_pipelined_write" => {
-                    opts.set_enable_pipelined_write = Some(value.decode()?)
+                    opts.set_enable_pipelined_write = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_min_level_to_compress" => {
-                    opts.set_min_level_to_compress = Some(value.decode()?)
+                    opts.set_min_level_to_compress = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_report_bg_io_stats" => opts.set_report_bg_io_stats = Some(value.decode()?),
-                "set_max_total_wal_size" => opts.set_max_total_wal_size = Some(value.decode()?),
-                "set_wal_recovery_mode" => opts.set_wal_recovery_mode = Some(value.decode()?),
-                "enable_statistics" => opts.enable_statistics = Some(value.decode()?),
+                "set_report_bg_io_stats" => {
+                    opts.set_report_bg_io_stats = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_max_total_wal_size" => {
+                    opts.set_max_total_wal_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_wal_recovery_mode" => {
+                    opts.set_wal_recovery_mode = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "enable_statistics" => {
+                    opts.enable_statistics = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_stats_dump_period_sec" => {
-                    opts.set_stats_dump_period_sec = Some(value.decode()?)
+                    opts.set_stats_dump_period_sec = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_stats_persist_period_sec" => {
-                    opts.set_stats_persist_period_sec = Some(value.decode()?)
+                    opts.set_stats_persist_period_sec = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_advise_random_on_open" => {
-                    opts.set_advise_random_on_open = Some(value.decode()?)
+                    opts.set_advise_random_on_open = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 // "set_access_hint_on_compaction_start" => {
-                //     opts.set_access_hint_on_compaction_start = Some(value.decode()?)
+                //     opts.set_access_hint_on_compaction_start = Some(value.decode().map_err(|_| OptionsError::Invalid(key.clone()))?)
                 // }
-                "set_use_adaptive_mutex" => opts.set_use_adaptive_mutex = Some(value.decode()?),
-                "set_num_levels" => opts.set_num_levels = Some(value.decode()?),
-                "set_memtable_prefix_bloom_ratio" => {
-                    opts.set_memtable_prefix_bloom_ratio = Some(value.decode()?)
+                "set_use_adaptive_mutex" => {
+                    opts.set_use_adaptive_mutex = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_max_compaction_bytes" => opts.set_max_compaction_bytes = Some(value.decode()?),
-                "set_wal_dir" => opts.set_wal_dir = Some(value.decode()?),
-                "set_wal_ttl_seconds" => opts.set_wal_ttl_seconds = Some(value.decode()?),
-                "set_wal_size_limit_mb" => opts.set_wal_size_limit_mb = Some(value.decode()?),
+                "set_num_levels" => {
+                    opts.set_num_levels = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_memtable_prefix_bloom_ratio" => {
+                    opts.set_memtable_prefix_bloom_ratio = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_max_compaction_bytes" => {
+                    opts.set_max_compaction_bytes = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_wal_dir" => {
+                    opts.set_wal_dir = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_wal_ttl_seconds" => {
+                    opts.set_wal_ttl_seconds = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_wal_size_limit_mb" => {
+                    opts.set_wal_size_limit_mb = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_manifest_preallocation_size" => {
-                    opts.set_manifest_preallocation_size = Some(value.decode()?)
+                    opts.set_manifest_preallocation_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_skip_stats_update_on_db_open" => {
-                    opts.set_skip_stats_update_on_db_open = Some(value.decode()?)
+                    opts.set_skip_stats_update_on_db_open = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_keep_log_file_num" => opts.set_keep_log_file_num = Some(value.decode()?),
-                "set_allow_mmap_writes" => opts.set_allow_mmap_writes = Some(value.decode()?),
-                "set_allow_mmap_reads" => opts.set_allow_mmap_reads = Some(value.decode()?),
-                "set_manual_wal_flush" => opts.set_manual_wal_flush = Some(value.decode()?),
-                "set_atomic_flush" => opts.set_atomic_flush = Some(value.decode()?),
-                "set_ratelimiter" => opts.set_ratelimiter = Some(value.decode()?),
-                "set_max_log_file_size" => opts.set_max_log_file_size = Some(value.decode()?),
+                "set_keep_log_file_num" => {
+                    opts.set_keep_log_file_num = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_allow_mmap_writes" => {
+                    opts.set_allow_mmap_writes = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_allow_mmap_reads" => {
+                    opts.set_allow_mmap_reads = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_manual_wal_flush" => {
+                    opts.set_manual_wal_flush = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_atomic_flush" => {
+                    opts.set_atomic_flush = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_ratelimiter" => {
+                    opts.set_ratelimiter = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_max_log_file_size" => {
+                    opts.set_max_log_file_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_log_file_time_to_roll" => {
-                    opts.set_log_file_time_to_roll = Some(value.decode()?)
+                    opts.set_log_file_time_to_roll = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_recycle_log_file_num" => opts.set_recycle_log_file_num = Some(value.decode()?),
+                "set_recycle_log_file_num" => {
+                    opts.set_recycle_log_file_num = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_soft_pending_compaction_bytes_limit" => {
-                    opts.set_soft_pending_compaction_bytes_limit = Some(value.decode()?)
+                    opts.set_soft_pending_compaction_bytes_limit = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_hard_pending_compaction_bytes_limit" => {
-                    opts.set_hard_pending_compaction_bytes_limit = Some(value.decode()?)
+                    opts.set_hard_pending_compaction_bytes_limit = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_arena_block_size" => opts.set_arena_block_size = Some(value.decode()?),
-                "set_dump_malloc_stats" => opts.set_dump_malloc_stats = Some(value.decode()?),
+                "set_arena_block_size" => {
+                    opts.set_arena_block_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_dump_malloc_stats" => {
+                    opts.set_dump_malloc_stats = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_memtable_whole_key_filtering" => {
-                    opts.set_memtable_whole_key_filtering = Some(value.decode()?)
+                    opts.set_memtable_whole_key_filtering = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_enable_blob_files" => opts.set_enable_blob_files = Some(value.decode()?),
-                "set_min_blob_size" => opts.set_min_blob_size = Some(value.decode()?),
-                "set_blob_file_size" => opts.set_blob_file_size = Some(value.decode()?),
+                "set_enable_blob_files" => {
+                    opts.set_enable_blob_files = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_min_blob_size" => {
+                    opts.set_min_blob_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_blob_file_size" => {
+                    opts.set_blob_file_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_blob_compression_type" => {
-                    opts.set_blob_compression_type = Some(value.decode()?)
+                    opts.set_blob_compression_type = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "set_enable_blob_gc" => opts.set_enable_blob_gc = Some(value.decode()?),
-                "set_blob_gc_age_cutoff" => opts.set_blob_gc_age_cutoff = Some(value.decode()?),
+                "set_enable_blob_gc" => {
+                    opts.set_enable_blob_gc = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                "set_blob_gc_age_cutoff" => {
+                    opts.set_blob_gc_age_cutoff = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
                 "set_blob_gc_force_threshold" => {
-                    opts.set_blob_gc_force_threshold = Some(value.decode()?)
+                    opts.set_blob_gc_force_threshold = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
                 "set_blob_compaction_readahead_size" => {
-                    opts.set_blob_compaction_readahead_size = Some(value.decode()?)
+                    opts.set_blob_compaction_readahead_size = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                // "set_allow_ingest_behind" => opts.set_allow_ingest_behind = Some(value.decode()?),
+                // "set_allow_ingest_behind" => opts.set_allow_ingest_behind = Some(value.decode().map_err(|_| OptionsError::Invalid(key.clone()))?),
                 // "add_compact_on_deletion_collector_factory" => {
-                //     opts.add_compact_on_deletion_collector_factory = Some(value.decode()?)
+                //     opts.add_compact_on_deletion_collector_factory = Some(value.decode().map_err(|_| OptionsError::Invalid(key.clone()))?)
                 // }
                 "set_prefix_extractor_prefix_length" => {
-                    opts.set_prefix_extractor_prefix_length = Some(value.decode()?)
+                    opts.set_prefix_extractor_prefix_length = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
                 }
-                "merge_operator" => opts.merge_operator = Some(value.decode()?),
-                _ => (),
+                "merge_operator" => {
+                    opts.merge_operator = Some(
+                        value
+                            .decode()
+                            .map_err(|_| OptionsError::Invalid(key.clone()))?,
+                    )
+                }
+                _ => return Err(OptionsError::Unknown(key)),
             }
         }
+        opts.validate()?;
         Ok(opts)
     }
+
+    fn validate(&self) -> Result<(), OptionsError> {
+        const COMPRESSION: &[&str] = &["none", "snappy", "zlib", "bz2", "lz4", "lz4hc", "zstd"];
+
+        validate_choice(
+            "set_compression_type",
+            &self.set_compression_type,
+            COMPRESSION,
+        )?;
+        validate_choice(
+            "set_bottommost_compression_type",
+            &self.set_bottommost_compression_type,
+            COMPRESSION,
+        )?;
+        validate_choice(
+            "set_blob_compression_type",
+            &self.set_blob_compression_type,
+            COMPRESSION,
+        )?;
+        validate_choice(
+            "set_log_level",
+            &self.set_log_level,
+            &["debug", "info", "warn", "error", "fatal", "header"],
+        )?;
+        validate_choice(
+            "set_compaction_style",
+            &self.set_compaction_style,
+            &["level", "universal", "fifo"],
+        )?;
+        validate_choice(
+            "set_wal_recovery_mode",
+            &self.set_wal_recovery_mode,
+            &[
+                "toleratecorruptedtailrecords",
+                "absoluteconsistency",
+                "pointintime",
+                "skipanycorruptedrecord",
+            ],
+        )?;
+        validate_choice(
+            "merge_operator",
+            &self.merge_operator,
+            &[
+                "counter_merge_operator",
+                "erlang_merge_operator",
+                "bitset_merge_operator",
+            ],
+        )?;
+
+        if let Some(value) = &self.set_max_bytes_for_level_multiplier_additional {
+            if value.is_empty()
+                || value
+                    .split(',')
+                    .any(|part| part.trim().parse::<i32>().is_err())
+            {
+                return Err(OptionsError::Invalid(
+                    "set_max_bytes_for_level_multiplier_additional".to_string(),
+                ));
+            }
+        }
+
+        if let Some(value) = &self.set_ratelimiter {
+            let values: Result<Vec<i64>, _> = value
+                .split(',')
+                .map(|part| part.trim().parse::<i64>())
+                .collect();
+            let values =
+                values.map_err(|_| OptionsError::Invalid("set_ratelimiter".to_string()))?;
+            if values.len() != 3 || i32::try_from(values[2]).is_err() {
+                return Err(OptionsError::Invalid("set_ratelimiter".to_string()));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn validate_choice(
+    name: &str,
+    value: &Option<String>,
+    accepted: &[&str],
+) -> Result<(), OptionsError> {
+    if let Some(value) = value
+        && !accepted.contains(&value.trim().to_lowercase().as_str())
+    {
+        return Err(OptionsError::Invalid(name.to_string()));
+    }
+    Ok(())
 }
 
 impl From<RockerOptions> for Options {
@@ -707,16 +1282,12 @@ impl From<RockerOptions> for Options {
         if !opts.set_inplace_update_locks.is_none() {
             db_opts.set_inplace_update_locks(opts.set_inplace_update_locks.unwrap());
         }
-        if !opts.set_max_bytes_for_level_multiplier_additional.is_none() {
-            let mut v: Vec<i32> = Vec::new();
-            for part in opts
-                .set_max_bytes_for_level_multiplier_additional
-                .unwrap()
-                .split(",")
-            {
-                v.push(part.trim().parse::<i32>().unwrap())
-            }
-            db_opts.set_max_bytes_for_level_multiplier_additional(v.as_slice());
+        if let Some(value) = opts.set_max_bytes_for_level_multiplier_additional {
+            let values: Vec<i32> = value
+                .split(',')
+                .filter_map(|part| part.trim().parse::<i32>().ok())
+                .collect();
+            db_opts.set_max_bytes_for_level_multiplier_additional(values.as_slice());
         }
         // Removed from RocksDB 11: SST file sizes are always checked during open.
         if !opts.set_max_write_buffer_size_to_maintain.is_none() {
@@ -824,12 +1395,14 @@ impl From<RockerOptions> for Options {
         if !opts.set_atomic_flush.is_none() {
             db_opts.set_atomic_flush(opts.set_atomic_flush.unwrap());
         }
-        if !opts.set_ratelimiter.is_none() {
-            let mut v: Vec<i64> = Vec::new();
-            for part in opts.set_ratelimiter.unwrap().split(",") {
-                v.push(part.trim().parse::<i64>().unwrap())
+        if let Some(value) = opts.set_ratelimiter {
+            let values: Vec<i64> = value
+                .split(',')
+                .filter_map(|part| part.trim().parse::<i64>().ok())
+                .collect();
+            if let [bytes_per_second, refill_period_us, fairness] = values.as_slice() {
+                db_opts.set_ratelimiter(*bytes_per_second, *refill_period_us, *fairness as i32);
             }
-            db_opts.set_ratelimiter(v[0], v[1], v[2] as i32);
         }
         if !opts.set_max_log_file_size.is_none() {
             db_opts.set_max_log_file_size(opts.set_max_log_file_size.unwrap());
@@ -909,8 +1482,8 @@ impl From<RockerOptions> for Options {
             db_opts.set_prefix_extractor(prefix_extractor);
         }
 
-        if !opts.merge_operator.is_none() {
-            match opts.merge_operator.unwrap().as_str() {
+        if let Some(merge_operator) = opts.merge_operator {
+            match merge_operator.trim().to_lowercase().as_str() {
                 "counter_merge_operator" => {
                     db_opts.set_merge_operator_associative("counter_merge_operator", counter_merge);
                 }

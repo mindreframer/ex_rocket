@@ -4,6 +4,7 @@ rustler::atoms! {
     end_of_iterator,
     error,
     invalid_iterator_options,
+    invalid_option,
     invalid_write_options,
     more,
     ok,

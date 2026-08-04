@@ -159,8 +159,8 @@ defmodule ExRocket.ContractBaselineTest do
     read_options = File.read!(Path.join(@project_root, "native/rocker/src/read_options.rs"))
     inventory = File.read!(Path.join(@project_root, "@meta/@wiki/ROADMAP002-BASELINE.md"))
 
-    assert options =~ "Decoder<'a> for RockerOptions"
-    assert read_options =~ "Decoder<'a> for RockerReadOptions"
+    assert options =~ "pub fn decode(term: Term<'_>) -> Result<Self, OptionsError>"
+    assert read_options =~ "pub fn decode(term: Term<'_>) -> Result<Self, ReadOptionsError>"
     assert inventory =~ "unknown keys are silently ignored"
   end
 

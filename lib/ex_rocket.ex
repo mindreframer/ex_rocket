@@ -34,6 +34,7 @@ defmodule ExRocket do
           | :resource_busy
           | :invalid_write_options
           | :invalid_iterator_options
+          | {:invalid_option, atom()}
           | {:unknown_option, atom()}
 
   @version Mix.Project.config()[:version]
