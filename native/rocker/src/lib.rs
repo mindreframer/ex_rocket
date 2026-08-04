@@ -1,4 +1,5 @@
 mod atoms;
+mod iterator_options;
 mod merge;
 mod nif;
 mod options;

@@ -1,7 +1,8 @@
 use crate::atoms::{
-    backup, end_of_iterator, error, invalid_write_options, ok, snap, undefined, unknown_cf,
-    unknown_option, vsn1,
+    backup, end_of_iterator, error, invalid_iterator_options, invalid_write_options, more, ok,
+    snap, undefined, unknown_cf, unknown_option, vsn1,
 };
+use crate::iterator_options::{IteratorOptionsError, IteratorTakeOptions};
 use crate::options::RockerOptions;
 use crate::read_options::RockerReadOptions;
 use crate::write_options::{RockerWriteOptions, WriteOptionsError};
@@ -34,8 +35,13 @@ impl SnapshotResource {
     }
 }
 
+pub struct IteratorState {
+    iter: DBIterator<'static>,
+    pending: Option<(Box<[u8]>, Box<[u8]>)>,
+}
+
 pub struct IteratorResource {
-    iter: Mutex<DBIterator<'static>>,
+    state: Mutex<IteratorState>,
     _owner: ResourceArc<DbResource>,
     _snapshot_owner: Option<ResourceArc<SnapshotResource>>,
 }
@@ -43,8 +49,8 @@ pub struct IteratorResource {
 impl Resource for IteratorResource {}
 
 impl IteratorResource {
-    fn lock(&self) -> MutexGuard<'_, DBIterator<'static>> {
-        self.iter.lock().unwrap()
+    fn lock(&self) -> MutexGuard<'_, IteratorState> {
+        self.state.lock().unwrap()
     }
 }
 
@@ -567,7 +573,10 @@ fn make_iterator_resource(
 ) -> ResourceArc<IteratorResource> {
     let iterator = unsafe { std::mem::transmute::<DBIterator<'_>, DBIterator<'static>>(iterator) };
     ResourceArc::new(IteratorResource {
-        iter: Mutex::new(iterator),
+        state: Mutex::new(IteratorState {
+            iter: iterator,
+            pending: None,
+        }),
         _owner: owner,
         _snapshot_owner: None,
     })
@@ -810,7 +819,10 @@ fn make_snapshot_iterator_resource(
 ) -> ResourceArc<IteratorResource> {
     let iterator = unsafe { std::mem::transmute::<DBIterator<'_>, DBIterator<'static>>(iterator) };
     ResourceArc::new(IteratorResource {
-        iter: Mutex::new(iterator),
+        state: Mutex::new(IteratorState {
+            iter: iterator,
+            pending: None,
+        }),
         _owner: snapshot.owner.clone(),
         _snapshot_owner: Some(snapshot),
     })
@@ -949,16 +961,101 @@ pub fn restore_from_backup(
     }
 }
 
-#[rustler::nif]
+fn encode_iterator_options_error<'a>(
+    env: Env<'a>,
+    validation_error: IteratorOptionsError,
+) -> NifResult<Term<'a>> {
+    match validation_error {
+        IteratorOptionsError::Invalid => Ok((error(), invalid_iterator_options()).encode(env)),
+        IteratorOptionsError::Unknown(key) => {
+            let key = Atom::from_str(env, &key)?;
+            Ok((error(), (unknown_option(), key)).encode(env))
+        }
+    }
+}
+
+fn iterator_entry<'a>(
+    env: Env<'a>,
+    key: &[u8],
+    value: &[u8],
+) -> NifResult<(Binary<'a>, Binary<'a>)> {
+    let mut output_key = OwnedBinary::new(key.len()).ok_or(rustler::Error::BadArg)?;
+    output_key.as_mut_slice().copy_from_slice(key);
+    let mut output_value = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
+    output_value.as_mut_slice().copy_from_slice(value);
+    Ok((output_key.release(env), output_value.release(env)))
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
+pub fn iterator_take<'a>(
+    env: Env<'a>,
+    resource: ResourceArc<IteratorResource>,
+    options: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let options = match IteratorTakeOptions::decode(options) {
+        Ok(options) => options,
+        Err(reason) => return encode_iterator_options_error(env, reason),
+    };
+    let mut state = resource.lock();
+    let mut rows = Vec::with_capacity(options.max_entries);
+    let mut payload_bytes = 0usize;
+    let mut exhausted = false;
+
+    while rows.len() < options.max_entries {
+        let item = match state.pending.take() {
+            Some(item) => Some(Ok(item)),
+            None => state.iter.next(),
+        };
+
+        match item {
+            None => {
+                exhausted = true;
+                break;
+            }
+            Some(Err(reason)) => return Ok((error(), reason.to_string()).encode(env)),
+            Some(Ok((key, value))) => {
+                let entry_bytes = key.len().saturating_add(value.len());
+                let next_payload = payload_bytes.saturating_add(entry_bytes);
+
+                if !rows.is_empty()
+                    && options
+                        .max_bytes
+                        .is_some_and(|max_bytes| next_payload > max_bytes)
+                {
+                    state.pending = Some((key, value));
+                    break;
+                }
+
+                rows.push(iterator_entry(env, key.as_ref(), value.as_ref())?);
+                payload_bytes = next_payload;
+
+                if options
+                    .max_bytes
+                    .is_some_and(|max_bytes| payload_bytes >= max_bytes)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    let status = if exhausted { end_of_iterator() } else { more() };
+    Ok((ok(), rows, status).encode(env))
+}
+
+#[rustler::nif(schedule = "DirtyIo")]
 pub fn next<'a>(env: Env<'a>, resource: ResourceArc<IteratorResource>) -> NifResult<Term<'a>> {
-    match resource.lock().next() {
+    let mut state = resource.lock();
+    let item = match state.pending.take() {
+        Some(item) => Some(Ok(item)),
+        None => state.iter.next(),
+    };
+
+    match item {
         None => Ok(end_of_iterator().encode(env)),
         Some(Ok((key, value))) => {
-            let mut output_key = OwnedBinary::new(key.len()).ok_or(rustler::Error::BadArg)?;
-            output_key.as_mut_slice().copy_from_slice(key.as_ref());
-            let mut output_value = OwnedBinary::new(value.len()).ok_or(rustler::Error::BadArg)?;
-            output_value.as_mut_slice().copy_from_slice(value.as_ref());
-            Ok((ok(), output_key.release(env), output_value.release(env)).encode(env))
+            let (key, value) = iterator_entry(env, key.as_ref(), value.as_ref())?;
+            Ok((ok(), key, value).encode(env))
         }
         Some(Err(reason)) => Ok((error(), reason.to_string()).encode(env)),
     }

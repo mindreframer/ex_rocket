@@ -244,4 +244,128 @@ defmodule ExRocket.Iterator.Test do
       :end_of_iterator = ExRocket.next(iter)
     end
   end
+
+  describe "iterator_take/2" do
+    test "returns an empty exhausted page", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+      {:ok, iter} = ExRocket.iterator(db, {:start})
+
+      assert {:ok, [], :end_of_iterator} =
+               ExRocket.iterator_take(iter, %{max_entries: 10})
+    end
+
+    test "preserves exact entry-bound status and exact-once continuation", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+
+      assert {:ok, 3} =
+               ExRocket.write_batch(db, [
+                 {:put, "k1", "v1"},
+                 {:put, "k2", "v2"},
+                 {:put, "k3", "v3"}
+               ])
+
+      {:ok, iter} = ExRocket.iterator(db, {:start})
+
+      assert {:ok, [{"k1", "v1"}, {"k2", "v2"}], :more} =
+               ExRocket.iterator_take(iter, %{max_entries: 2})
+
+      assert {:ok, [{"k3", "v3"}], :end_of_iterator} =
+               ExRocket.iterator_take(iter, %{max_entries: 2})
+
+      assert {:ok, [], :end_of_iterator} =
+               ExRocket.iterator_take(iter, %{max_entries: 2})
+
+      {:ok, exact_iter} = ExRocket.iterator(db, {:start})
+
+      assert {:ok, [{"k1", "v1"}, {"k2", "v2"}, {"k3", "v3"}], :more} =
+               ExRocket.iterator_take(exact_iter, %{max_entries: 3})
+
+      assert {:ok, [], :end_of_iterator} =
+               ExRocket.iterator_take(exact_iter, %{max_entries: 3})
+    end
+
+    test "enforces payload bounds without losing a buffered row", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+
+      assert {:ok, 3} =
+               ExRocket.write_batch(db, [
+                 {:put, "a", "111"},
+                 {:put, "b", "222"},
+                 {:put, "c", "333"}
+               ])
+
+      {:ok, iter} = ExRocket.iterator(db, {:start})
+
+      assert {:ok, [{"a", "111"}], :more} =
+               ExRocket.iterator_take(iter, %{max_entries: 10, max_bytes: 5})
+
+      assert {:ok, "b", "222"} = ExRocket.next(iter)
+
+      assert {:ok, [{"c", "333"}], :end_of_iterator} =
+               ExRocket.iterator_take(iter, %{max_entries: 10, max_bytes: 5})
+    end
+
+    test "returns one oversized first row to guarantee progress", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+      :ok = ExRocket.put(db, "oversized", :binary.copy(<<0, 255>>, 32))
+      {:ok, iter} = ExRocket.iterator(db, {:start})
+
+      assert {:ok, [{"oversized", value}], :more} =
+               ExRocket.iterator_take(iter, %{max_entries: 10, max_bytes: 1})
+
+      assert value == :binary.copy(<<0, 255>>, 32)
+      assert {:ok, [], :end_of_iterator} = ExRocket.iterator_take(iter, %{max_entries: 10})
+    end
+
+    test "works with range and prefix iterator boundaries", context do
+      {:ok, db} = ExRocket.open(context.db_path, %{set_prefix_extractor_prefix_length: 3})
+
+      assert {:ok, 4} =
+               ExRocket.write_batch(db, [
+                 {:put, "pre1", "v1"},
+                 {:put, "pre2", "v2"},
+                 {:put, "pre3", "v3"},
+                 {:put, "zzz1", "v4"}
+               ])
+
+      {:ok, range_iter} = ExRocket.iterator_range(db, {:start}, "pre2", "zzz1")
+
+      assert {:ok, [{"pre2", "v2"}, {"pre3", "v3"}], :end_of_iterator} =
+               ExRocket.iterator_take(range_iter, %{max_entries: 10})
+
+      {:ok, prefix_iter} = ExRocket.prefix_iterator(db, "pre")
+
+      assert {:ok, [{"pre1", "v1"}, {"pre2", "v2"}], :more} =
+               ExRocket.iterator_take(prefix_iter, %{max_entries: 2})
+
+      assert {:ok, [{"pre3", "v3"}], :end_of_iterator} =
+               ExRocket.iterator_take(prefix_iter, %{max_entries: 2})
+    end
+
+    test "rejects invalid options without advancing and supports reverse binary rows", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+      key1 = <<0, 1>>
+      key2 = <<0, 2>>
+      :ok = ExRocket.put(db, key1, <<255, 1>>)
+      :ok = ExRocket.put(db, key2, <<255, 2>>)
+      {:ok, iter} = ExRocket.iterator(db, {:end})
+
+      assert {:error, :invalid_iterator_options} = ExRocket.iterator_take(iter, %{})
+
+      assert {:error, :invalid_iterator_options} =
+               ExRocket.iterator_take(iter, %{max_entries: 0})
+
+      assert {:error, :invalid_iterator_options} =
+               ExRocket.iterator_take(iter, %{max_entries: 100_001})
+
+      assert {:error, :invalid_iterator_options} =
+               ExRocket.iterator_take(iter, %{max_entries: 1, max_bytes: 67_108_865})
+
+      assert {:error, {:unknown_option, :limit}} =
+               ExRocket.iterator_take(iter, %{max_entries: 1, limit: 1})
+
+      assert {:ok, [{^key2, <<255, 2>>}, {^key1, <<255, 1>>}], :more} =
+               ExRocket.iterator_take(iter, %{max_entries: 2})
+    end
+  end
 end

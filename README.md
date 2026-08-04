@@ -83,6 +83,24 @@ Use a column family to keep related data separate:
 {:ok, "active"} = ExRocket.get_cf(db, "sessions", "token")
 ```
 
+Page through one stable iterator view with bounded native transfers:
+
+```elixir
+{:ok, iterator} = ExRocket.iterator(db, {:start})
+
+{:ok, rows, status} =
+  ExRocket.iterator_take(iterator, %{
+    max_entries: 1_000,
+    max_bytes: 4 * 1024 * 1024
+  })
+```
+
+`max_entries` is required and capped at 100,000. `max_bytes` counts key/value
+payload, is capped at 64 MiB, and excludes Erlang term overhead. If the first
+row alone exceeds the byte limit, it is returned to guarantee progress. A
+bound-first page returns `:more`; only observed exhaustion returns
+`:end_of_iterator`.
+
 See the [full cheatsheet](https://github.com/mindreframer/ex_rocket/blob/main/CHEATSHEET.md) for iterators, merge operators, snapshots, checkpoints, backups, options, and error-handling patterns.
 
 ## Technology

@@ -347,6 +347,33 @@ defmodule ExRocket.CF.Test do
         ])
     end
 
+    test "iterator_take pages column-family and prefix iterators", context do
+      {:ok, db} =
+        ExRocket.open(context.db_path, %{set_prefix_extractor_prefix_length: 3})
+
+      :ok = ExRocket.create_cf(db, "rows", %{set_prefix_extractor_prefix_length: 3})
+
+      assert {:ok, 3} =
+               ExRocket.write_batch(db, [
+                 {:put_cf, "rows", "pre1", "v1"},
+                 {:put_cf, "rows", "pre2", "v2"},
+                 {:put_cf, "rows", "zzz1", "v3"}
+               ])
+
+      {:ok, iter} = ExRocket.iterator_cf(db, "rows", {:start})
+
+      assert {:ok, [{"pre1", "v1"}, {"pre2", "v2"}], :more} =
+               ExRocket.iterator_take(iter, %{max_entries: 2})
+
+      assert {:ok, [{"zzz1", "v3"}], :end_of_iterator} =
+               ExRocket.iterator_take(iter, %{max_entries: 2})
+
+      {:ok, prefix_iter} = ExRocket.prefix_iterator_cf(db, "rows", "pre")
+
+      assert {:ok, [{"pre1", "v1"}, {"pre2", "v2"}], :end_of_iterator} =
+               ExRocket.iterator_take(prefix_iter, %{max_entries: 10})
+    end
+
     test "key_may_exist_cf", context do
       {:ok, db} = ExRocket.open(context.db_path)
       cf = "test_cf1"

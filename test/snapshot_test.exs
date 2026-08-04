@@ -203,5 +203,42 @@ defmodule ExRocket.Snapshot.Test do
 
       {:ok, "k0", _} = ExRocket.next(from_ref4)
     end
+
+    test "iterator_take preserves default and CF snapshot views across pages", context do
+      {:ok, db} = ExRocket.open(context.db_path)
+      :ok = ExRocket.create_cf(db, "rows")
+
+      assert {:ok, 4} =
+               ExRocket.write_batch(db, [
+                 {:put, "k1", "before-1"},
+                 {:put, "k2", "before-2"},
+                 {:put_cf, "rows", "k1", "cf-before-1"},
+                 {:put_cf, "rows", "k2", "cf-before-2"}
+               ])
+
+      {:ok, snap} = ExRocket.snapshot(db)
+      {:ok, iter} = ExRocket.snapshot_iterator(snap, {:start})
+      {:ok, cf_iter} = ExRocket.snapshot_iterator_cf(snap, "rows", {:start})
+
+      assert {:ok, 4} =
+               ExRocket.write_batch(db, [
+                 {:put, "k1", "after-1"},
+                 {:put, "k3", "after-3"},
+                 {:put_cf, "rows", "k1", "cf-after-1"},
+                 {:put_cf, "rows", "k3", "cf-after-3"}
+               ])
+
+      assert {:ok, [{"k1", "before-1"}], :more} =
+               ExRocket.iterator_take(iter, %{max_entries: 1})
+
+      assert {:ok, [{"k2", "before-2"}], :more} =
+               ExRocket.iterator_take(iter, %{max_entries: 1})
+
+      assert {:ok, [], :end_of_iterator} =
+               ExRocket.iterator_take(iter, %{max_entries: 1})
+
+      assert {:ok, [{"k1", "cf-before-1"}, {"k2", "cf-before-2"}], :end_of_iterator} =
+               ExRocket.iterator_take(cf_iter, %{max_entries: 10})
+    end
   end
 end

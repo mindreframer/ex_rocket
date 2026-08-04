@@ -2,13 +2,13 @@
 
 ## Progress
 
-- [ ] Phase 3.1: Finalize iterator-take bounds and status semantics.
-- [ ] Phase 3.2: Implement the native bounded extraction loop.
-- [ ] Phase 3.3: Enforce entry and payload-memory bounds.
-- [ ] Phase 3.4: Cover every iterator variant.
-- [ ] Phase 3.5: Verify continuation and snapshot correctness.
-- [ ] Phase 3.6: Add comparative iterator throughput benchmarks.
-- [ ] Phase 3.7: Run gates and commit.
+- [x] Phase 3.1: Finalize iterator-take bounds and status semantics.
+- [x] Phase 3.2: Implement the native bounded extraction loop.
+- [x] Phase 3.3: Enforce entry and payload-memory bounds.
+- [x] Phase 3.4: Cover every iterator variant.
+- [x] Phase 3.5: Verify continuation and snapshot correctness.
+- [x] Phase 3.6: Add comparative iterator throughput benchmarks.
+- [x] Phase 3.7: Run gates and commit.
 
 ## Implementation Steps
 
@@ -22,9 +22,9 @@
 
 ## Quality Gate
 
-- [ ] Boundary and progress tests pass.
-- [ ] All iterator-owner tests pass.
-- [ ] Snapshot stability tests pass.
-- [ ] Benchmark smoke passes.
-- [ ] Full source gate passes.
-- [ ] Only EPIC003 changes are committed.
+- [x] Boundary and progress tests pass.
+- [x] All iterator-owner tests pass.
+- [x] Snapshot stability tests pass.
+- [x] Benchmark smoke passes.
+- [x] Full source gate passes.
+- [x] Only EPIC003 changes are committed.

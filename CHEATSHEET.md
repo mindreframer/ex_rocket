@@ -276,6 +276,27 @@ operand2 = :erlang.term_to_binary({:list_append, [:x, :y]})
 :end_of_iterator = ExRocket.next(iter)
 ```
 
+### Bounded Bulk Reads
+```elixir
+{:ok, iter} = ExRocket.iterator(db, {:start})
+
+{:ok, rows, status} = ExRocket.iterator_take(iter, %{
+  max_entries: 1_000,
+  max_bytes: 4 * 1024 * 1024
+})
+
+case status do
+  :more -> ExRocket.iterator_take(iter, %{max_entries: 1_000})
+  :end_of_iterator -> :done
+end
+```
+
+`max_entries` is required and has a 100,000-entry hard limit. `max_bytes` has a
+64 MiB hard limit and counts only copied key/value bytes, not Erlang term
+overhead. One oversized first row is returned so iteration always progresses.
+Reusing the same iterator preserves its RocksDB view; use a snapshot iterator
+when every page must represent an explicit point in time.
+
 ### Range Iterators
 ```elixir
 # Iterator with range
